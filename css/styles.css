@@ -410,3 +410,24 @@ table.tbl th { color: var(--muted); font-weight: 650; font-size: 12px; position:
 .cloud-dot.sin-sesion { background: var(--gold); }
 .login { z-index: 110; }
 .login .field input { text-align: left; font-size: 17px; letter-spacing: normal; margin: 0; }
+
+/* Calculadora */
+.calc-tabs { margin-bottom: 6px; }
+.calc-form details summary { list-style: none; }
+.calc-form details summary::-webkit-details-marker { display: none; }
+details.plan summary { list-style: none; }
+details.plan summary::-webkit-details-marker { display: none; }
+tr[data-act] td { cursor: pointer; }
+
+/* Impresión / PDF de la simulación */
+@media print {
+  .topbar, .bottomnav, .no-print, .toast, #sheet { display: none !important; }
+  body { background: #fff; color: #000; }
+  .view { padding: 0; max-width: none; }
+  .hero { background: #fff !important; color: #000; border: 2px solid #00563F; box-shadow: none; }
+  .hero::after { display: none; }
+  .card { box-shadow: none; break-inside: avoid; }
+  details.plan { display: block; }
+  details.plan > * { display: block !important; }
+  .table-wrap { max-height: none !important; overflow: visible !important; }
+}

@@ -62,6 +62,20 @@ async function descargar() {
   }
 }
 
+// Unidad de Fomento de Vivienda (UFV) del día, publicada por el BCB
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+async function descargarUFV() {
+  const r = await fetch('https://www.bcb.gob.bo/librerias/indicadores/ufv/ultimo.php', { headers: { 'User-Agent': 'Mozilla/5.0 (mi-cartera-bmsc; GitHub Actions)' } });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const t = (await r.text()).replace(/<[^>]+>/g, ' | ').replace(/(\s*\|\s*)+/g, ' | ').replace(/\s+/g, ' ');
+  const f = t.match(/FECHA: \| (\d{1,2}) de (\w+) (\d{4})/i);
+  const v = t.match(/Bs \| ([\d.,]+) por unidad/i);
+  if (!v) throw new Error('No se encontró el valor de la UFV');
+  const valor = Number(v[1].includes(',') ? v[1].replace(/\./g, '').replace(',', '.') : v[1]);
+  const mes = f ? MESES.indexOf(f[2].toLowerCase()) + 1 : 0;
+  return { valor, fecha: f && mes ? `${f[3]}-${String(mes).padStart(2, '0')}-${f[1].padStart(2, '0')}` : hoyBolivia() };
+}
+
 const iFile = process.argv.indexOf('--file');
 const txt = iFile > 0 ? await readFile(process.argv[iFile + 1], 'utf8') : await descargar();
 const dias = parsear(txt).slice(-DIAS_HISTORIAL);
@@ -70,7 +84,12 @@ if (!dias.length) throw new Error('No se encontró ningún TCO en el CSV del BCB
 // Solo reescribir si cambió algún dato (evita commits vacíos)
 let previo = null;
 try { previo = JSON.parse(await readFile(SALIDA, 'utf8')); } catch { /* primera vez */ }
-if (previo && JSON.stringify(previo.dias) === JSON.stringify(dias)) {
+let ufv = previo?.ufv || null;
+if (iFile < 0) {
+  try { ufv = await descargarUFV(); console.log(`UFV ${ufv.valor} (${ufv.fecha})`); }
+  catch (e) { console.error('UFV no disponible:', e.message); }
+}
+if (previo && JSON.stringify(previo.dias) === JSON.stringify(dias) && JSON.stringify(previo.ufv) === JSON.stringify(ufv)) {
   console.log('Sin datos nuevos. Último corte:', dias.at(-1).corte);
   process.exit(0);
 }
@@ -79,6 +98,7 @@ await writeFile(SALIDA, JSON.stringify({
   fuente: 'Banco Central de Bolivia - Tipo de Cambio Oficial (TCO)',
   url: URL_CSV,
   actualizado: new Date().toISOString(),
+  ufv,
   dias
 }, null, 1) + '\n');
 const u = dias.at(-1);

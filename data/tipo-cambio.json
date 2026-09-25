@@ -2,6 +2,10 @@
  "fuente": "Banco Central de Bolivia - Tipo de Cambio Oficial (TCO)",
  "url": "https://www.bcb.gob.bo/bcb_tco_publico_descargar_csv.php",
  "actualizado": "2026-09-25T04:55:19.759Z",
+ "ufv": {
+  "valor": 3.34865,
+  "fecha": "2026-09-24"
+ },
  "dias": [
   {
    "corte": "2026-06-30",

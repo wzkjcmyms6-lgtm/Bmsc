@@ -1,7 +1,7 @@
 /* Service worker: permite usar la app sin conexión */
-const CACHE = 'mi-cartera-v5';
+const CACHE = 'mi-cartera-v6';
 const ASSETS = [
-  './', 'index.html', 'css/styles.css', 'js/data.js', 'js/store.js', 'js/app.js', 'js/firebase-config.js', 'js/nube.js',
+  './', 'index.html', 'css/styles.css', 'js/data.js', 'js/store.js', 'js/app.js', 'js/calculadora.js', 'js/firebase-config.js', 'js/nube.js',
   'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
   'data/tipo-cambio.json'
 ];

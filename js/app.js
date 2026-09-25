@@ -80,7 +80,7 @@ const tcDescripcion = () => S().settings.tcModo === 'manual' && num(S().settings
 async function descargarTC() {
   const propia = fetch(`data/tipo-cambio.json?v=${Date.now()}`, { cache: 'no-store' })
     .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(j => j.dias || []);
+    .then(j => { if (j.ufv?.valor) S().settings.ufv = j.ufv; return j.dias || []; });
   const respaldo = fetch(TC_FUENTE_RESPALDO, { cache: 'no-store' })
     .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
     .then(t => t.trim().split(/\r?\n/).slice(1).map(l => l.split(',')).filter(c => +c[3] > 0)
@@ -353,7 +353,8 @@ const ROUTES = {
   'caso': { title: 'Trámite', nav: 'homebase', render: viewCase, back: '#/homebase' },
   'agenda': { title: 'Agenda', nav: 'agenda', render: viewAgenda },
   'mas': { title: 'Más', nav: 'mas', render: viewMore },
-  'calculadora': { title: 'Calculadoras', nav: 'mas', render: viewCalc, back: '#/mas' },
+  'calculadora': { title: 'Calculadora', nav: 'mas', render: () => '', back: '#/mas' },
+  'parametros': { title: 'Parámetros de productos', nav: 'mas', render: () => '', back: '#/mas' },
   'ajustes': { title: 'Ajustes', nav: 'mas', render: viewSettings, back: '#/mas' },
   'respaldo': { title: 'Respaldo de datos', nav: 'mas', render: viewBackup, back: '#/mas' },
   'tipo-cambio': { title: 'Dólar oficial', nav: 'inicio', render: viewTC, back: '#/' },
@@ -381,7 +382,6 @@ function render() {
   const def = ROUTES[current.name];
   $('#view').innerHTML = def.render(current.param);
   def.after && def.after();
-  if (current.name === 'calculadora') calcUpdate();
 }
 window.addEventListener('hashchange', route);
 $('#backBtn').addEventListener('click', () => {
@@ -498,7 +498,7 @@ function viewHome() {
     <button class="action" data-act="newClient">${ICONS.user}Nuevo cliente</button>
     <button class="action" data-act="newCase">${ICONS.folder}Nuevo trámite</button>
     <button class="action" data-act="newEvent">${ICONS.cal}Agendar</button>
-    <a class="action" href="#/calculadora">${ICONS.calc}Calcular cuota</a>
+    <a class="action" href="#/calculadora">${ICONS.calc}Calculadora</a>
   </div>
 
   <div class="grid-2" style="margin-top:10px">
@@ -750,7 +750,7 @@ function crossSell(c) {
     if (m && cr.estado === 'vigente' && s / m <= 0.5) tips.push(`Su ${tipoInfo(cr.tipo).label.toLowerCase()} ya está pagado en ${pct(1 - s / m, 0)}: candidato a renovación o nuevo crédito.`);
   });
   if (act.length && !tipos.includes('tarjeta') && !clientInMora(c)) tips.push('No tiene tarjeta de crédito: ofrécela como producto de vinculación.');
-  if (['PyME', 'Microempresa', 'Empresa'].includes(c.segmento)) tips.push('Ofrece cobros con QR, POS y banca por internet para su negocio.');
+  if (act.length && !tipos.includes('linea') && ['Independiente', 'Profesional independiente'].includes(c.segmento)) tips.push('Ingresos variables: una línea de crédito rotativa le da liquidez cuando la necesita.');
   if (c.segmento === 'Asalariado' && !tipos.includes('vivienda') && !tipos.includes('vivienda_social')) tips.push('Evalúa si califica a crédito de vivienda de interés social.');
   if (!tips.length) return '';
   return `<div class="section-title">Oportunidades</div>
@@ -1331,7 +1331,7 @@ function viewMore() {
   return `
   <div class="section-title">Herramientas</div>
   <div class="card tight">
-    ${item('#/calculadora', 'calc', 'Calculadoras', 'Cuota, plan de pagos y capacidad de pago')}
+    ${item('#/calculadora', 'calc', 'Calculadora de créditos', 'Simulador, capacidad de pago, tarjeta, prepago y conversor')}
     ${item('', 'book', 'Guías de crédito', 'Requisitos y consejos por tipo de crédito', 'openGuides')}
     ${item('', 'bulb', 'Consejos para el ejecutivo', 'Buenas prácticas de gestión de cartera', 'openTips')}
   </div>
@@ -1340,6 +1340,7 @@ function viewMore() {
   <div class="section-title">Configuración</div>
   <div class="card tight">
     ${item('#/ajustes', 'gear', 'Ajustes y metas', 'Tu nombre, agencia, tipo de cambio y metas')}
+    ${item('#/parametros', 'target', 'Parámetros de productos', 'Tasas, plazos, financiamiento, endeudamiento y seguros')}
     ${item('#/respaldo', 'download', 'Respaldo de datos', 'Exportar / importar y descargar Excel (CSV)')}
     ${item('', 'lock', S().settings.pinHash ? 'Cambiar o quitar PIN' : 'Proteger con PIN', 'Bloquea la app al abrirla', 'pinSetup')}
   </div>
@@ -1351,112 +1352,6 @@ function viewMore() {
   </div>
   <p class="center small muted">Mi Cartera · v1.0</p>`;
 }
-
-/* =========================================================
-   Vista: Calculadoras
-   ========================================================= */
-function viewCalc() {
-  const tab = UI.calcTab;
-  const st = S().settings;
-  return `
-  <div class="segmented">
-    <button class="${tab === 'cuota' ? 'active' : ''}" data-act="calcTab" data-id="cuota">Cuota y plan</button>
-    <button class="${tab === 'capacidad' ? 'active' : ''}" data-act="calcTab" data-id="capacidad">Capacidad de pago</button>
-  </div>
-  ${tab === 'cuota' ? `
-  <div class="card">
-    <form id="fCalc" class="calc">
-      <div class="fields-2">
-        ${field({ label: 'Monto', name: 'monto', type: 'money', value: '50000' })}
-        ${field({ label: 'Moneda', name: 'moneda', type: 'select', value: 'BOB', options: CATALOG.monedas.map(m => ({ v: m.id, l: m.nombre })) })}
-      </div>
-      <div class="fields-2">
-        ${field({ label: 'Tasa anual %', name: 'tasa', type: 'money', value: '12' })}
-        ${field({ label: 'Plazo (meses)', name: 'plazo', type: 'number', value: '36', attrs: 'inputmode="numeric" min="1" max="360"' })}
-      </div>
-      ${field({ label: 'Sistema de amortización', name: 'sistema', type: 'select', value: 'frances', options: [{ v: 'frances', l: 'Cuota fija (francés)' }, { v: 'aleman', l: 'Capital constante (alemán)' }] })}
-    </form>
-  </div>
-  <div id="calcOut"></div>` : `
-  <div class="card">
-    <form id="fCap" class="calc">
-      ${field({ label: 'Ingreso líquido mensual (Bs)', name: 'ingreso', type: 'money', value: '8000' })}
-      <div class="fields-2">
-        ${field({ label: 'Gastos familiares (Bs)', name: 'gastos', type: 'money', value: '0', hint: 'Para micro/PyME' })}
-        ${field({ label: 'Cuotas de otras deudas (Bs)', name: 'deudas', type: 'money', value: '0' })}
-      </div>
-      <div class="fields-2">
-        ${field({ label: '% máximo de endeudamiento', name: 'max', type: 'money', value: String(st.endeudamiento || 40) })}
-        ${field({ label: 'Tasa anual %', name: 'tasa', type: 'money', value: '12' })}
-      </div>
-      ${field({ label: 'Plazo (meses)', name: 'plazo', type: 'number', value: '48', attrs: 'inputmode="numeric" min="1"' })}
-    </form>
-  </div>
-  <div id="capOut"></div>
-  <p class="small muted center">Cálculo referencial. Aplica las políticas de crédito vigentes del banco.</p>`}`;
-}
-
-function calcUpdate() {
-  const f = $('#fCalc');
-  if (f) {
-    const d = formData(f);
-    const P = num(d.monto), r = num(d.tasa) / 100 / 12, n = Math.min(600, parseInt(d.plazo, 10) || 0);
-    const out = $('#calcOut');
-    if (!P || !n) { out.innerHTML = ''; return; }
-    let saldo = P, rows = [], totalInt = 0;
-    const cf = cuotaFrancesa(P, num(d.tasa), n);
-    for (let i = 1; i <= n; i++) {
-      const int = saldo * r;
-      const cap = d.sistema === 'frances' ? cf - int : P / n;
-      const cuota = cap + int;
-      saldo = Math.max(0, saldo - cap);
-      totalInt += int;
-      rows.push([i, cuota, cap, int, saldo]);
-    }
-    const m = d.moneda;
-    out.innerHTML = `
-      <div class="hero" style="margin-bottom:10px">
-        <div class="label">${d.sistema === 'frances' ? 'Cuota mensual fija' : 'Primera cuota (decreciente)'}</div>
-        <div class="big num">${money(rows[0][1], m)}</div>
-        <div class="meta">
-          <div><b class="num">${money(totalInt, m, false)}</b>intereses</div>
-          <div><b class="num">${money(P + totalInt, m, false)}</b>total a pagar</div>
-          ${d.sistema !== 'frances' ? `<div><b class="num">${money(rows[n - 1][1], m)}</b>última cuota</div>` : ''}
-        </div>
-      </div>
-      <div class="row between" style="margin-bottom:8px">
-        <span class="section-title" style="margin:0">Plan de pagos</span>
-        <button class="btn sm" data-act="shareCalc">${ICONS.wa} Compartir</button>
-      </div>
-      <div class="card tight"><div class="table-wrap" style="max-height:340px">
-        <table class="tbl num"><thead><tr><th>N°</th><th>Cuota</th><th>Capital</th><th>Interés</th><th>Saldo</th></tr></thead>
-        <tbody>${rows.map(rw => `<tr><td>${rw[0]}</td>${rw.slice(1).map(v => `<td>${nf2.format(v)}</td>`).join('')}</tr>`).join('')}</tbody></table>
-      </div></div>
-      <p class="small muted center">No incluye seguros, comisiones ni impuestos. Solo referencial.</p>`;
-    calcUpdate.last = { P, tasa: num(d.tasa), n, m, cuota: rows[0][1], totalInt, sistema: d.sistema };
-  }
-  const g = $('#fCap');
-  if (g) {
-    const d = formData(g);
-    const ingreso = num(d.ingreso), gastos = num(d.gastos), deudas = num(d.deudas);
-    const disponible = ingreso - gastos;
-    const cuotaMax = Math.max(0, disponible * num(d.max) / 100 - deudas);
-    const r = num(d.tasa) / 100 / 12, n = parseInt(d.plazo, 10) || 0;
-    const montoMax = n ? (r ? cuotaMax * (1 - Math.pow(1 + r, -n)) / r : cuotaMax * n) : 0;
-    const ratio = disponible > 0 ? deudas / disponible : 0;
-    $('#capOut').innerHTML = `
-      <div class="hero">
-        <div class="label">Monto máximo estimado a prestar</div>
-        <div class="big num">Bs ${nf2.format(montoMax)}</div>
-        <div class="meta">
-          <div><b class="num">Bs ${nf2.format(cuotaMax)}</b>cuota máxima</div>
-          <div><b class="num">${pct(ratio)}</b>endeudamiento actual</div>
-        </div>
-      </div>
-      ${ratio * 100 >= num(d.max) ? '<div class="card" style="margin-top:10px;border-color:var(--red)"><b style="color:var(--red)">⚠️ El cliente ya supera el límite de endeudamiento.</b></div>' : ''}`;
-  }
-}
-document.addEventListener('input', e => { if (e.target.closest('.calc')) calcUpdate(); });
 
 /* =========================================================
    Vista: Ajustes
@@ -1487,7 +1382,6 @@ function viewSettings() {
     </div>
     <div class="section-title">Parámetros</div>
     <div class="card">
-      ${field({ label: '% endeudamiento máximo (calculadora)', name: 'endeudamiento', type: 'money', value: st.endeudamiento })}
       ${field({ label: 'Tema', name: 'theme', type: 'select', value: st.theme, options: [{ v: 'auto', l: 'Automático' }, { v: 'light', l: 'Claro' }, { v: 'dark', l: 'Oscuro' }] })}
     </div>
     <button class="btn primary block" type="submit">Guardar ajustes</button>
@@ -1506,7 +1400,7 @@ ROUTES.ajustes.after = () => {
       ejecutivo: d.ejecutivo.trim(), agencia: d.agencia.trim(),
       metaMensual: num(d.metaMensual), metaClientes: parseInt(d.metaClientes, 10) || 0,
       tcModo: d.tcModo === 'manual' && num(d.tc) ? 'manual' : 'auto', tcTipo: d.tcTipo || 'tco', tc: num(d.tc) || '',
-      endeudamiento: num(d.endeudamiento) || 40, theme: d.theme
+      theme: d.theme
     });
     Store.save(); applyTheme(); toast('Ajustes guardados'); location.hash = '#/';
   });
@@ -1597,11 +1491,11 @@ function loadDemo() {
   const d = n => { const x = new Date(); x.setDate(x.getDate() + n); return isoDate(x); };
   const ago = n => d(-n);
   const people = [
-    ['Carlos Gutiérrez Suárez', '4839201', 'SC', '71234567', 'PyME', 'Comercio de repuestos', [['pyme', 'USD', 120000, 86000, 9.5, 60, ago(400), 15, 'vigente', 'Hipotecaria'], ['tarjeta', 'BOB', 15000, 6200, 24, 0, ago(200), 5, 'vigente', '']]],
+    ['Carlos Gutiérrez Suárez', '4839201', 'SC', '71234567', 'Profesional independiente', 'Arquitecto', [['vivienda', 'USD', 120000, 86000, 8.5, 240, ago(400), 15, 'vigente', 'Hipotecaria'], ['tarjeta', 'BOB', 15000, 6200, 24, 0, ago(200), 5, 'vigente', '']]],
     ['María Fernanda Rojas Vaca', '6120458', 'SC', '76543210', 'Asalariado', 'Médica - CNS', [['vivienda_social', 'BOB', 650000, 598000, 5.5, 240, ago(300), 10, 'vigente', 'Hipotecaria']]],
-    ['Jorge Luis Mamani Quispe', '3928475', 'LP', '70011223', 'Microempresa', 'Tienda de abarrotes', [['micro', 'BOB', 35000, 21000, 18, 24, ago(250), 20, 'mora', 'Personal']]],
+    ['Jorge Luis Mamani Quispe', '3928475', 'LP', '70011223', 'Independiente', 'Comerciante', [['consumo', 'BOB', 35000, 21000, 16, 24, ago(250), 20, 'mora', 'Personal']]],
     ['Ana Lucía Paz Méndez', '7751203', 'CB', '72233445', 'Asalariado', 'Contadora', [['consumo', 'BOB', 60000, 22000, 13, 36, ago(700), 28, 'vigente', 'Personal'], ['vehicular', 'USD', 25000, 19500, 8.5, 60, ago(360), 3, 'vigente', 'Prendaria']]],
-    ['Agroindustrias El Porvenir SRL', '1023456', 'SC', '33445566', 'Empresa', 'Producción de soya', [['agropecuario', 'USD', 350000, 290000, 7, 84, ago(500), 30, 'vigente', 'Hipotecaria + prendaria'], ['boleta', 'BOB', 200000, 200000, 0, 12, ago(60), 0, 'vigente', 'Depósito a plazo']]],
+    ['Luis Alberto Suárez Vaca', '3021456', 'SC', '77445566', 'Asalariado', 'Gerente financiero', [['vivienda', 'USD', 180000, 151000, 7.5, 300, ago(500), 30, 'vigente', 'Hipotecaria'], ['linea', 'BOB', 70000, 30000, 13, 36, ago(60), 12, 'vigente', 'Personal']]],
     ['Roberto Añez Justiniano', '5567234', 'BE', '69998877', 'Independiente', 'Transporte', [['vehicular', 'BOB', 180000, 150000, 11, 60, ago(180), d(2).slice(8), 'vigente', 'Prendaria']]],
     ['Patricia Vargas Soliz', '8834521', 'SC', '75566778', 'Asalariado', 'Docente', [['consumo', 'BOB', 25000, 24000, 14, 24, ago(30), d(4).slice(8), 'vigente', 'Personal']]]
   ];
@@ -1621,11 +1515,11 @@ function loadDemo() {
   };
   mk(ids[3], '', 'vivienda', 90000, 'USD', 'documentos', 5, 'alta', { fechaObjetivo: d(20), tasa: 7.5, plazo: 240, destino: 'Compra de departamento', tareas: [{ id: Store.uid(), t: 'Solicitar folio real actualizado', fecha: d(1), done: false }, { id: Store.uid(), t: 'Coordinar avalúo con perito', fecha: d(5), done: false }] });
   mk(null, 'Luis Fernando Ortiz', 'consumo', 40000, 'BOB', 'prospecto', 1, 'media', { telefono: '78899001', tasa: 13, plazo: 36 });
-  mk(ids[0], '', 'linea', 200000, 'USD', 'comite', 5, 'alta', { fechaObjetivo: d(7), destino: 'Capital de operaciones' });
+  mk(ids[0], '', 'linea', 50000, 'BOB', 'comite', 3, 'alta', { fechaObjetivo: d(7), destino: 'Línea de crédito personal', tasa: 13, plazo: 24 });
   mk(null, 'Sofía Ribera', 'vehicular', 30000, 'USD', 'evaluacion', 6, 'media', { telefono: '70123123', tasa: 8.5, plazo: 60 });
-  Store.upsertEvent({ tipo: 'visita', titulo: 'Visita de seguimiento al negocio', fecha: today(), hora: '10:00', clientId: ids[2] });
+  Store.upsertEvent({ tipo: 'visita', titulo: 'Visita de seguimiento', fecha: today(), hora: '10:00', clientId: ids[2] });
   Store.upsertEvent({ tipo: 'cobranza', titulo: 'Llamar por cuota atrasada', fecha: ago(1), hora: '', clientId: ids[2] });
-  Store.upsertEvent({ tipo: 'reunion', titulo: 'Presentar propuesta de línea en comité', fecha: d(3), hora: '15:00', clientId: ids[0] });
+  Store.upsertEvent({ tipo: 'reunion', titulo: 'Presentar línea de crédito en comité', fecha: d(3), hora: '15:00', clientId: ids[0] });
   if (!S().settings.metaMensual) { S().settings.metaMensual = 500000; S().settings.metaClientes = 8; Store.save(); }
   toast('Datos de ejemplo cargados');
   location.hash = '#/';
@@ -1782,13 +1676,6 @@ const ACTIONS = {
   },
   goto: el => { location.hash = el.dataset.href; },
 
-  calcTab: el => { UI.calcTab = el.dataset.id; render(); },
-  shareCalc: () => {
-    const l = calcUpdate.last; if (!l) return;
-    const text = `Simulación de crédito (referencial)\nMonto: ${money(l.P, l.m)}\nTasa: ${l.tasa}% anual\nPlazo: ${l.n} meses\n${l.sistema === 'frances' ? 'Cuota mensual' : 'Primera cuota'}: ${money(l.cuota, l.m)}\n\nNo incluye seguros ni comisiones.\n${S().settings.ejecutivo || ''} - BMSC`;
-    if (navigator.share) navigator.share({ text }).catch(() => {});
-    else window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
-  },
   openGuides: () => { UI.hbTab = 'guias'; location.hash = '#/homebase'; },
   openTips: () => { UI.hbTab = 'consejos'; location.hash = '#/homebase'; },
   pinSetup: () => pinSetup(),

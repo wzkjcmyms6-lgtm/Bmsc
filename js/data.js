@@ -11,7 +11,7 @@ const CATALOG = {
     { id: 'USD', label: '$us', nombre: 'Dólares' }
   ],
 
-  segmentos: ['Asalariado', 'Independiente', 'Microempresa', 'PyME', 'Empresa', 'Agropecuario'],
+  segmentos: ['Asalariado', 'Independiente', 'Profesional independiente', 'Jubilado / rentista'],
 
   estadosCredito: [
     { id: 'vigente', label: 'Vigente', badge: '' },
@@ -20,19 +20,14 @@ const CATALOG = {
     { id: 'cancelado', label: 'Cancelado', badge: 'gray' }
   ],
 
+  /* Banca Personas: solo estos productos */
   tiposCredito: [
     { id: 'consumo', label: 'Consumo', icon: '🛒', color: '#00875A' },
+    { id: 'tarjeta', label: 'Tarjeta de crédito', icon: '💳', color: '#E0A800' },
     { id: 'vivienda', label: 'Vivienda', icon: '🏠', color: '#2F6FDE' },
-    { id: 'vivienda_social', label: 'Vivienda social', icon: '🏡', color: '#5B8DEF' },
+    { id: 'vivienda_social', label: 'Vivienda de interés social', icon: '🏡', color: '#5B8DEF' },
     { id: 'vehicular', label: 'Vehicular', icon: '🚗', color: '#8E5CD9' },
-    { id: 'pyme', label: 'PyME', icon: '🏪', color: '#E27B17' },
-    { id: 'micro', label: 'Microcrédito', icon: '🧺', color: '#D6453D' },
-    { id: 'productivo', label: 'Productivo', icon: '🏭', color: '#00A160' },
-    { id: 'agropecuario', label: 'Agropecuario', icon: '🌾', color: '#9A7B00' },
-    { id: 'empresarial', label: 'Empresarial', icon: '🏢', color: '#003B2B' },
-    { id: 'tarjeta', label: 'Tarjeta de crédito', icon: '💳', color: '#F2B705' },
-    { id: 'linea', label: 'Línea de crédito', icon: '📈', color: '#16857F' },
-    { id: 'boleta', label: 'Boleta de garantía', icon: '📄', color: '#6B7A73' }
+    { id: 'linea', label: 'Línea de crédito', icon: '📈', color: '#16857F' }
   ],
 
   etapas: [
@@ -67,23 +62,33 @@ const REQ_BASE = [
 /* Guías por tipo de crédito: requisitos (checklist), pasos y consejos */
 const GUIDES = {
   consumo: {
-    resumen: 'Crédito de libre disponibilidad para personas asalariadas o independientes con ingresos demostrables.',
+    resumen: 'Crédito de libre disponibilidad para personas asalariadas, independientes o jubiladas con ingresos demostrables.',
     requisitos: [...REQ_BASE,
-      'Últimas 3 boletas de pago',
-      'Certificado de trabajo (antigüedad y cargo)',
-      'Extracto de aportes AFP / Gestora',
+      'Últimas 3 boletas de pago (asalariado)',
+      'Certificado de trabajo con antigüedad y cargo',
+      'Extracto de aportes a la Gestora',
+      'Respaldo de ingresos (independiente): facturas, extractos, declaraciones',
       'Datos de garante personal (si aplica)'],
     consejos: [
-      'Verifica que la cuota no supere el % de endeudamiento permitido sobre el ingreso líquido.',
+      'Calcula el líquido pagable: sueldo bruto menos 12,71% de aportes (más el Aporte Nacional Solidario si gana más de Bs 13.000).',
       'Revisa deudas en el sistema financiero: la calificación debe ser A o B.',
-      'Ofrece débito automático y seguro de desgravamen desde el inicio.',
-      'Clientes con planilla en el banco suelen tener proceso más rápido.'
+      'Clientes con planilla en el banco suelen tener un proceso más rápido.',
+      'Ofrece débito automático y seguro de desgravamen desde el inicio.'
+    ]
+  },
+  tarjeta: {
+    resumen: 'Línea rotativa para compras y consumos. Excelente producto de vinculación.',
+    requisitos: [...REQ_BASE, 'Respaldo de ingresos', 'Formulario de solicitud firmado'],
+    consejos: [
+      'Ofrécela a clientes con créditos al día: aumenta la vinculación.',
+      'Explica fecha de corte, fecha de pago, pago mínimo e intereses.',
+      'Muestra con la calculadora cuánto tarda en pagar la deuda si solo paga el mínimo.'
     ]
   },
   vivienda: {
     resumen: 'Compra, construcción, ampliación o refacción de vivienda con garantía hipotecaria.',
     requisitos: [...REQ_BASE,
-      'Respaldo de ingresos (boletas / estados financieros)',
+      'Respaldo de ingresos (boletas o declaraciones)',
       'Testimonio de propiedad del inmueble',
       'Folio real actualizado (Derechos Reales)',
       'Certificado alodial / de gravámenes',
@@ -93,14 +98,14 @@ const GUIDES = {
       'Minuta de compra-venta (si es compra)',
       'Seguro de desgravamen y seguro del inmueble'],
     consejos: [
-      'Solicita el folio real al inicio: es el documento que más demora.',
+      'Pide el folio real al inicio: es el documento que más demora.',
       'Coordina el avalúo apenas tengas la documentación legal completa.',
-      'Revisa el % de financiamiento máximo según el valor del avalúo.',
-      'Si el inmueble es única vivienda sin fines comerciales, evalúa Vivienda de Interés Social.'
+      'Si es la única vivienda y está dentro de los límites en UFV, evalúa Vivienda de Interés Social (tasa regulada).',
+      'Aclara si la tasa es fija todo el plazo o fija por unos años y luego variable (TRe + margen).'
     ]
   },
   vivienda_social: {
-    resumen: 'Vivienda de interés social con tasas reguladas (Ley 393 de Servicios Financieros). Aplica a única vivienda sin fines comerciales dentro de los valores límite.',
+    resumen: 'Vivienda de interés social con tasas máximas reguladas (DS 1842): única vivienda sin fines comerciales, de hasta UFV 460.000 (casa) o UFV 400.000 (departamento).',
     requisitos: [...REQ_BASE,
       'Respaldo de ingresos',
       'Declaración jurada de única vivienda',
@@ -111,13 +116,13 @@ const GUIDES = {
       'Impuestos al día',
       'Seguro de desgravamen y seguro del inmueble'],
     consejos: [
-      'Confirma que el valor comercial esté dentro del límite vigente en UFV.',
-      'Explica al cliente la tasa regulada según el rango del valor de la vivienda.',
-      'Verifica la opción de garantía de fondo (FOGAVISP) si no cubre el aporte propio.'
+      'Tasa máxima según valor: hasta UFV 255.000 → 5,5%; UFV 255.001–380.000 → 6%; UFV 380.001–460.000 → 6,5%.',
+      'La calculadora convierte el valor del inmueble a UFV y aplica la tasa que corresponde.',
+      'Si el cliente no tiene todo el aporte propio, revisa la garantía del fondo FOGAVISP.'
     ]
   },
   vehicular: {
-    resumen: 'Compra de vehículo nuevo o usado con garantía prendaria del vehículo.',
+    resumen: 'Compra de vehículo nuevo o usado con garantía prendaria del propio vehículo.',
     requisitos: [...REQ_BASE,
       'Respaldo de ingresos',
       'Proforma / cotización de la concesionaria',
@@ -127,120 +132,56 @@ const GUIDES = {
       'Seguro automotor todo riesgo endosado al banco'],
     consejos: [
       'Consulta convenios vigentes con concesionarias: suelen mejorar tasa y plazo.',
-      'Revisa el aporte propio mínimo requerido.',
-      'Recuerda registrar la prenda en el registro correspondiente.'
-    ]
-  },
-  pyme: {
-    resumen: 'Financiamiento de capital de operaciones o inversión para pequeñas y medianas empresas.',
-    requisitos: [...REQ_BASE,
-      'NIT y certificado de inscripción',
-      'Matrícula de comercio (SEPREC)',
-      'Licencia de funcionamiento municipal',
-      'Estados financieros (últimas 2 gestiones)',
-      'Declaraciones de impuestos (últimos 6 meses)',
-      'Flujo de caja proyectado',
-      'Documentos de la garantía ofrecida',
-      'Testimonio de constitución y poder del representante (si es sociedad)'],
-    consejos: [
-      'Visita el negocio: la evaluación in situ fortalece la propuesta.',
-      'Diferencia capital de operaciones (corto plazo) de inversión (largo plazo).',
-      'Si es productivo, verifica si aplica a tasa regulada de crédito productivo.',
-      'Ofrece cuenta corriente, POS/QR y banca por internet para vincular al cliente.'
-    ]
-  },
-  micro: {
-    resumen: 'Crédito para microempresarios con evaluación en el lugar del negocio.',
-    requisitos: [...REQ_BASE,
-      'Croquis del negocio',
-      'Verificación in situ del negocio',
-      'Respaldo de ventas (cuaderno, facturas, notas)',
-      'NIT o patente (si tiene)',
-      'Garantía personal o prendaria'],
-    consejos: [
-      'Construye el flujo del negocio con el cliente: ventas, costos y gastos familiares.',
-      'Toma fotografías del negocio e inventario para el expediente.',
-      'Considera la estacionalidad de las ventas al definir el plan de pagos.'
-    ]
-  },
-  productivo: {
-    resumen: 'Crédito para actividades productivas (manufactura, agroindustria, turismo, etc.) con tasas reguladas según tamaño.',
-    requisitos: [...REQ_BASE,
-      'NIT / matrícula de comercio',
-      'Estados financieros o flujo de la actividad',
-      'Plan de inversión o de producción',
-      'Proformas de maquinaria o insumos',
-      'Documentos de la garantía'],
-    consejos: [
-      'Confirma que la actividad esté clasificada como productiva (CAEDEC).',
-      'Revisa las opciones de garantía FOGACP si la garantía es insuficiente.'
-    ]
-  },
-  agropecuario: {
-    resumen: 'Financiamiento a productores agrícolas y pecuarios según su ciclo productivo.',
-    requisitos: [...REQ_BASE,
-      'Documento de propiedad o derecho de uso de la tierra (INRA / DD.RR.)',
-      'Plan de producción / siembra',
-      'Registro de marca de ganado (pecuario)',
-      'Contratos de venta o acopio (si tiene)',
-      'Documentos de la garantía'],
-    consejos: [
-      'Ajusta el plan de pagos al ciclo de cosecha o venta.',
-      'Evalúa seguro agrícola si está disponible.',
-      'Verifica la ubicación del predio con coordenadas.'
-    ]
-  },
-  empresarial: {
-    resumen: 'Financiamiento a empresas grandes: capital de operaciones, inversión y operaciones contingentes.',
-    requisitos: [
-      'Testimonio de constitución y modificaciones',
-      'Poder del representante legal',
-      'NIT, matrícula de comercio y licencia de funcionamiento',
-      'Estados financieros auditados (últimas 3 gestiones)',
-      'Flujo de caja proyectado',
-      'Detalle de deudas financieras',
-      'Autorización de consulta a buró',
-      'Documentos de garantías'],
-    consejos: [
-      'Prepara el análisis de ratios: liquidez, endeudamiento, cobertura.',
-      'Coordina con el área de riesgos antes de presentar al comité.',
-      'Identifica oportunidades de cash management y comercio exterior.'
-    ]
-  },
-  tarjeta: {
-    resumen: 'Tarjeta de crédito como línea rotativa de consumo.',
-    requisitos: [...REQ_BASE, 'Respaldo de ingresos', 'Formulario de solicitud firmado'],
-    consejos: [
-      'Excelente producto de vinculación para clientes con otros créditos al día.',
-      'Explica fechas de corte, pago mínimo e intereses.'
+      'Verifica el aporte propio mínimo (nuevo vs. usado).',
+      'Suma el seguro automotor a la cuota al conversar con el cliente: evita sorpresas.'
     ]
   },
   linea: {
-    resumen: 'Línea de crédito rotativa para capital de operaciones de empresas.',
-    requisitos: [
-      'Documentación legal de la empresa',
-      'Estados financieros (últimas 2 gestiones)',
-      'Flujo de caja proyectado',
-      'Autorización de consulta a buró',
-      'Documentos de garantías'],
-    consejos: ['Define claramente los productos que se podrán operar bajo la línea (préstamos, boletas, cartas de crédito).']
-  },
-  boleta: {
-    resumen: 'Boleta de garantía para licitaciones, cumplimiento de contrato o correcta inversión de anticipo.',
-    requisitos: [
-      'Solicitud con datos del beneficiario y objeto',
-      'Copia del pliego o contrato',
-      'Documentación legal de la empresa',
-      'Contragarantía (depósito, hipoteca o línea aprobada)'],
-    consejos: ['Verifica el texto exacto que exige el beneficiario antes de emitir.']
+    resumen: 'Línea de crédito personal rotativa: el cliente usa el monto aprobado cuando lo necesita, paga intereses solo por lo utilizado y el cupo se repone al pagar.',
+    requisitos: [...REQ_BASE,
+      'Respaldo de ingresos',
+      'Solicitud de línea con monto y plazo',
+      'Documentos de la garantía (si corresponde)'],
+    consejos: [
+      'Ideal para clientes con ingresos variables o gastos recurrentes.',
+      'Explica que paga intereses solo sobre el monto utilizado.',
+      'Revisa la vigencia de la línea y la fecha de renovación.'
+    ]
   }
+};
+
+/* Parámetros por producto (referenciales). Se editan en Más → Parámetros de productos
+   y se reemplazarán con la normativa interna del banco. */
+const PRODUCTOS_DEFAULT = {
+  consumo:  { tasa: 14,  plazoMax: 60,  financiamiento: 100, rci: 40, desgravamen: 0.05, seguroBien: 0 },
+  vivienda: { tasa: 8.5, plazoMax: 300, financiamiento: 80,  rci: 40, desgravamen: 0.05, seguroBien: 0.12 },
+  vivienda_social: { tasa: 5.5, plazoMax: 240, financiamiento: 100, rci: 40, desgravamen: 0.05, seguroBien: 0.12 },
+  vehicular: { tasa: 10, plazoMax: 60, financiamiento: 80, rci: 40, desgravamen: 0.05, seguroBien: 3 },
+  linea:    { tasa: 13,  plazoMax: 36,  financiamiento: 100, rci: 40, desgravamen: 0.05, seguroBien: 0 },
+  tarjeta:  { tasa: 24,  plazoMax: 0,   financiamiento: 100, rci: 40, desgravamen: 0, seguroBien: 0, pagoMinimo: 5, cuotaSistema: 5 }
+};
+/* seguroBien: vivienda = % anual sobre el valor del inmueble; vehicular = % anual sobre el valor del vehículo.
+   desgravamen: % mensual sobre el saldo. tarjeta.cuotaSistema: % del límite que se toma como cuota en la evaluación. */
+
+/* Vivienda de interés social (DS 1842): tasas máximas por valor en UFV */
+const VIS = {
+  limiteCasa: 460000,
+  limiteDepto: 400000,
+  tramos: [ { hasta: 255000, tasa: 5.5 }, { hasta: 380000, tasa: 6 }, { hasta: 460000, tasa: 6.5 } ]
+};
+const UFV_RESPALDO = { valor: 3.34865, fecha: '2026-09-24' };
+
+/* Descuentos de ley al asalariado (Gestora Pública, 2026) */
+const APORTES = {
+  laboral: 12.71, // 10% vejez + 1,71% riesgo común + 0,5% solidario + 0,5% comisión
+  ans: [ { sobre: 13000, pct: 1.15 }, { sobre: 25000, pct: 5.74 }, { sobre: 35000, pct: 11.48 } ] // Aporte Nacional Solidario
 };
 
 /* Consejos generales para el día a día del ejecutivo */
 const TIPS_GENERALES = [
   { t: 'Prioriza por peso', d: 'El 20% de tus clientes suele concentrar ~80% de tu cartera (clientes "A"). Visítalos con mayor frecuencia.' },
   { t: 'Mora temprana', d: 'Llama al cliente desde el día 1 de atraso. La mora se recupera mucho mejor en los primeros 30 días.' },
-  { t: 'Venta cruzada', d: 'Cada cliente con crédito es candidato a cuenta, tarjeta, seguros, débito automático y banca digital.' },
+  { t: 'Venta cruzada', d: 'Cada cliente con crédito de consumo, vivienda o vehicular es candidato a tarjeta de crédito, línea de crédito, seguros y débito automático.' },
   { t: 'Renovaciones', d: 'Clientes que ya pagaron más del 50% de su crédito y tienen buen historial son candidatos a refinanciamiento o nuevo crédito.' },
   { t: 'Documentos al día', d: 'Pide los documentos más lentos (folio real, avalúo) al inicio del trámite para no frenar el comité.' },
   { t: 'Registra todo', d: 'Anota cada contacto en la bitácora: te ayuda en comité y en la gestión de cobranza.' }

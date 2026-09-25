@@ -28,8 +28,18 @@ Los colores están inspirados en el Banco Mercantil Santa Cruz (verdes con acent
 - Recordatorio de cuota por WhatsApp (cobranza preventiva).
 
 **Herramientas**
-- Calculadora de cuota con plan de pagos (sistema francés o alemán) y opción de compartir.
-- Calculadora de capacidad de pago: cuota máxima y monto máximo prestable.
+- **Calculadora de créditos (Banca Personas)** — `js/calculadora.js`:
+  - *Simulador*: consumo, vivienda, vehicular y línea de crédito. Sistema francés o alemán, tasa fija o mixta
+    (fija + variable TRe), meses de gracia, desgravamen y seguro del bien, gastos iniciales, TEA y TEAC,
+    tabla de cuota por plazo, plan de pagos con fechas, riesgo cambiario en créditos en dólares, PDF y WhatsApp.
+  - *Vivienda de interés social*: convierte el valor a UFV y aplica la tasa máxima regulada (DS 1842: 5,5% / 6% / 6,5%).
+  - *Capacidad de pago*: líquido pagable (aportes Gestora 12,71% + Aporte Nacional Solidario), relación cuota/ingreso,
+    cuota de tarjetas por % del límite y monto máximo por producto.
+  - *Tarjeta*: pago mínimo vs. pago fijo, tiempo y costo de la deuda, compras en cuotas.
+  - *Prepago*: reducir cuota o plazo, con datos de un crédito de la cartera.
+  - *Conversor*: Bs ↔ $us (TCO) ↔ UFV y límites de vivienda social.
+  - Parámetros por producto editables en **Más → Parámetros de productos** (tasa, plazo, financiamiento, RCI, seguros).
+- Productos: consumo, tarjeta de crédito, vivienda, vivienda de interés social, vehicular y línea de crédito.
 - Metas mensuales de colocación y de clientes nuevos, con barra de avance.
 - Respaldo: exportar e importar en JSON y exportar la cartera a Excel (CSV).
 - PIN de seguridad, tema claro u oscuro, uso sin conexión e instalación en la pantalla de inicio.
