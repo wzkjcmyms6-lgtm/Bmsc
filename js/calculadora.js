@@ -669,7 +669,7 @@ ROUTES.parametros.render = () => {
 /* Normas internas (uso interno del banco): se guardan en Firebase, no en el código público.
    Solo el administrador puede cargarlas; los demás usuarios las leen al iniciar sesión. */
 function normasCard() {
-  const n = S().settings.normas?.endeudamiento;
+  const n = S().settings.normas?.endeudamiento, tc = S().settings.normas?.tarjetas;
   const estado = window.Nube?.normasEstado;
   return `
   <div class="section-title">Normas internas (protegidas)</div>
@@ -677,6 +677,7 @@ function normasCard() {
     <div class="small">${n
       ? `✅ Norma de endeudamiento cargada${n.version ? ' · versión ' + esc(n.version) : ''}${n.vigencia ? ' · vigente desde ' + esc(fmtDate(n.vigencia)) : ''}`
       : '⚠️ La norma de endeudamiento no está cargada en este dispositivo.'}</div>
+    <div class="small" style="margin-top:4px">${tc ? `✅ Tarjetas de crédito: ${Object.keys(tc.categorias || {}).length} categorías cargadas` : '⚠️ Los parámetros de tarjetas de crédito no están cargados.'}</div>
     ${estado === 'sin-permiso' ? '<div class="small" style="color:var(--red);margin-top:4px">Firebase no permite leer las normas: falta publicar la regla de «config».</div>' : ''}
     <div class="small muted" style="margin-top:6px">Se guardan en la nube (no en el código de la app) y solo se ven después de iniciar sesión. Al cerrar sesión se borran del dispositivo.</div>
     <details style="margin-top:8px"><summary class="link" style="cursor:pointer">Cargar o actualizar (solo administrador)</summary>
@@ -694,6 +695,11 @@ function validarNormas(txt) {
   const ok = e && isFinite(e.consumo) && e.tablas && ['vivienda', 'socialMayor', 'socialMenor']
     .every(k => Array.isArray(e.tablas[k]) && e.tablas[k].length && e.tablas[k].every(tramoOk));
   if (!ok) throw new Error('Al código le faltan datos de la norma de endeudamiento');
+  if (d.tarjetas !== undefined) {
+    const c = d.tarjetas && d.tarjetas.categorias;
+    const okTc = c && ['clasica', 'oro', 'platinum', 'black'].every(k => c[k] && [c[k].minimo, c[k].fijo, c[k].pct].every(v => isFinite(v) && v !== null));
+    if (!okTc) throw new Error('Al código le faltan datos de las tarjetas de crédito');
+  }
   return d;
 }
 ROUTES.parametros.after = () => {

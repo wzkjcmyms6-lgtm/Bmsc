@@ -561,3 +561,9 @@ table.tbl.tabla-norma th { white-space: normal; line-height: 1.2; vertical-align
 /* Botón para resetear la simulación (arriba) */
 .veh-top-der { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 .veh-reset { color: var(--red); border-color: var(--red-soft); white-space: nowrap; }
+
+/* Límite de tarjeta que alcanza */
+.tc-lim { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+.tc-lim summary { font-weight: 650; cursor: pointer; color: var(--green-600); }
+.tc-lim-fila { padding: 5px 0; gap: 10px; }
+.tc-lim-fila b { color: var(--green-600); white-space: nowrap; }

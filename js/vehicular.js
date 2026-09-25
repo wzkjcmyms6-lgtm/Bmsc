@@ -30,12 +30,13 @@ const VEH = {
     socialMayor: { nombre: 'Vivienda social con aporte propio ≥ 20%', corto: 'Social ≥ 20%' },
     socialMenor: { nombre: 'Vivienda social con aporte propio < 20%', corto: 'Social < 20%' }
   },
-  // Tarjetas de crédito: cuota a considerar = % del límite según tramo
-  tarjetas: [['visa', 'Visa Internacional'], ['master', 'Mastercard Clásica']],
-  tramosTC: [
-    { desde: 2100, hasta: 2330, pct: 10 }, { desde: 2340, hasta: 2870, pct: 9 }, { desde: 2880, hasta: 3720, pct: 8 },
-    { desde: 3730, hasta: 5290, pct: 7 }, { desde: 5300, hasta: 9150, pct: 6 }, { desde: 9160, hasta: 33900, pct: 5 },
-    { desde: 40000, hasta: Infinity, pct: 4 }
+  // Tarjetas de crédito: cuota a considerar = monto fijo + % del límite, según la categoría.
+  // Los valores (mínimo, fijo, %) son de uso interno: se leen de Firebase (config/normas → tarjetas).
+  categoriasTC: [
+    ['clasica', 'Visa Internacional / Mastercard Clásica', 'Clásica'],
+    ['oro', 'Visa Oro / Mastercard Gold', 'Oro / Gold'],
+    ['platinum', 'Visa Infinite / Mastercard Platinum', 'Infinite / Platinum'],
+    ['black', 'Visa Signature / Mastercard Black', 'Signature / Black']
   ],
   impuestoExterior: 13,                        // % que se descuenta a ingresos del exterior (referencial)
   treMN: 3.65, treVigencia: 'septiembre 2026'  // TRe MN publicada por el BCB (respaldo)
@@ -229,16 +230,14 @@ function vehForm() {
             <button type="button" class="icon-btn deuda-del" data-act="vehDeudaDel" data-i="${i}" aria-label="Quitar">${ICONS.x}</button>
           </div>
           ${d.cod === 'TC' ? `<div class="deuda-tc">
-            <select name="d_${i}_tarjeta">${VEH.tarjetas.map(([v, l]) => `<option value="${v}" ${(d.tarjeta || 'visa') === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+            <select name="d_${i}_tarjeta">${VEH.categoriasTC.map(([v, l]) => `<option value="${v}" ${catTC(d) === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
             <input name="d_${i}_limite" type="text" inputmode="decimal" placeholder="Límite de la tarjeta (Bs)" value="${esc(d.limite || '')}">
             <div class="small muted deuda-tc-info" id="tcInfo_${i}"></div>
           </div>` : ''}
         </div>`).join('') || '<div class="small muted" style="padding:6px 0">Sin deudas registradas.</div>'}</div>
       <button type="button" class="btn sm" data-act="vehDeudaAdd" style="margin-top:8px">${ICONS.plus} Agregar deuda</button>
       ${V.deudas.some(d => grupoDe(d.cod) === 'social') ? `<div class="veh-row" style="margin-top:6px"><div><span>Vivienda social: aporte propio</span><div class="small muted">Del crédito H3–H4 · define la tabla del límite total</div></div>${opciones('aporteSocial', V.aporteSocial === 'mayor' ? 'mayor' : 'menor', [['mayor', '≥ 20%'], ['menor', '< 20%']])}</div>` : ''}
-      <details class="small muted" style="margin-top:10px"><summary class="link" style="cursor:pointer">Cuota a considerar en tarjetas (% del límite)</summary>
-        <table class="tbl num" style="margin-top:6px"><tbody>${VEH.tramosTC.map(t => `<tr><td>Bs ${nf0.format(t.desde)} ${t.hasta === Infinity ? 'en adelante' : 'a ' + nf0.format(t.hasta)}</td><td>${t.pct}%</td></tr>`).join('')}</tbody></table>
-      </details>
+      <details class="small muted" style="margin-top:10px"><summary class="link" style="cursor:pointer">Cuota a considerar en tarjetas</summary>${tablaTarjetas()}</details>
       <div class="small muted" style="margin-top:10px">TC, N y el crédito nuevo (sin contar vivienda): hasta ${VEH.limite.consumo}% del ingreso mensual líquido. Con créditos de vivienda, además el total de deudas no debe pasar el % de la tabla según el ingreso anual mensualizado.</div>
       <details class="small muted" style="margin-top:6px"><summary class="link" style="cursor:pointer">% máximo del total de deudas con vivienda</summary>${tablaNormaVivienda()}</details>
       <div id="capBox"></div>
@@ -281,18 +280,46 @@ function historialSims(V) {
 }
 
 /* Tarjeta de crédito: % según el tramo del límite. Entre tramos se aplica el tramo siguiente. */
-function tramoTC(limite) {
-  if (!(limite > 0)) return null;
-  const t = VEH.tramosTC.find(x => limite <= x.hasta) || VEH.tramosTC.at(-1);
-  const exacto = limite >= t.desde;
-  const bajoMinimo = limite < VEH.tramosTC[0].desde;
-  return { ...t, exacto, bajoMinimo };
+/* Tarjetas de crédito (config de la nube): { maximoTabla, categorias: { clasica: { minimo, fijo, pct }, … } } */
+function tarjetasCfg() {
+  const t = S().settings.normas?.tarjetas;
+  if (!t || !t.categorias) return null;
+  const cats = {};
+  for (const [id, nombre, corto] of VEH.categoriasTC) {
+    const c = t.categorias[id];
+    if (!c) return null;
+    cats[id] = { id, nombre, corto, minimo: num(c.minimo), fijo: num(c.fijo), pct: num(c.pct) };
+  }
+  return { maximo: num(t.maximoTabla) || 0, cats };
 }
-const cuotaDeuda = d => {
-  if (d.cod !== 'TC') return num(d.cuota);
-  const t = tramoTC(num(d.limite));
-  return t ? num(d.limite) * t.pct / 100 : 0;
-};
+// Deudas guardadas antes con 'visa' / 'master' eran de la categoría clásica
+const catTC = d => VEH.categoriasTC.some(([v]) => v === d.tarjeta) ? d.tarjeta : 'clasica';
+function tcCalc(d) {
+  const L = num(d.limite);
+  if (!(L > 0)) return null;
+  const T = tarjetasCfg();
+  if (!T) return { sinParam: true, cuota: 0 };
+  const c = T.cats[catTC(d)];
+  return { ...c, limite: L, cuota: c.fijo + L * c.pct / 100, bajoMinimo: L < c.minimo, sobreTabla: T.maximo && L > T.maximo, maximo: T.maximo };
+}
+const cuotaDeuda = d => d.cod === 'TC' ? (tcCalc(d)?.cuota || 0) : num(d.cuota);
+const pctTC = v => new Intl.NumberFormat('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(v);
+function tablaTarjetas() {
+  const T = tarjetasCfg();
+  if (!T) return '<div style="margin-top:6px">⚠️ Los parámetros de tarjetas no están cargados en este dispositivo. Inicia sesión con internet o cárgalos en Más → Parámetros de productos.</div>';
+  return `<div class="table-wrap" style="margin-top:6px"><table class="tbl num tabla-norma"><thead><tr><th>Categoría</th><th>Límite mínimo</th><th>Cuota a considerar</th></tr></thead><tbody>
+    ${Object.values(T.cats).map(c => `<tr><td>${esc(c.corto)}</td><td>Bs ${nf0.format(c.minimo)}</td><td>Bs ${nf2.format(c.fijo)} + ${pctTC(c.pct)}%</td></tr>`).join('')}
+    </tbody></table></div><div style="margin-top:4px">Cuota = monto fijo + % del límite.${T.maximo ? ` Tabla hasta límites de Bs ${nf0.format(T.maximo)}.` : ''}</div>`;
+}
+/* Límite máximo de tarjeta que alcanza con la cuota libre (se redondea hacia abajo a Bs 100) */
+function limitesTC(cuotaLibre) {
+  const T = tarjetasCfg();
+  if (!T) return null;
+  return Object.values(T.cats).map(c => {
+    const lim = c.pct > 0 ? Math.floor((cuotaLibre - c.fijo) / (c.pct / 100) / 100) * 100 : 0;
+    return { ...c, lim, alcanza: lim >= c.minimo, tope: T.maximo && lim > T.maximo ? T.maximo : 0 };
+  });
+}
 
 /* Capacidad de pago según el servicio de deudas */
 const grupoDe = cod => (VEH.codigos.find(c => c.v === cod) || VEH.codigos[1]).g;
@@ -349,6 +376,7 @@ function capacidadDeudas(V, cuotaNueva) {
   const conVivienda = viv + soc > 0;
   // Sin los parámetros de la norma no se puede evaluar el límite total con vivienda
   const sinNorma = conVivienda && !N;
+  const sinTarjetas = V.deudas.some(d => d.cod === 'TC' && tcCalc(d)?.sinParam);
   const tabla = N ? tablaVivienda(V, soc > 0, N) : null;
   const tramo = tabla ? tramoVivienda(tabla, anual) : null;
   const limCons = N ? N.consumo : VEH.limite.consumo, limTotal = tramo ? tramo.pct : 0;
@@ -359,7 +387,7 @@ function capacidadDeudas(V, cuotaNueva) {
   const maxCons = mensual * limCons / 100 - cons;
   const maxTotal = conVivienda && !sinNorma ? anual * limTotal / 100 - (cons + viv + soc) : Infinity;
   const maxNueva = Math.max(0, Math.min(maxCons, maxTotal));
-  return { mensual, anual, cons, viv, soc, conVivienda: conVivienda && !sinNorma, sinNorma, tabla, tramo, limCons, limTotal, consNuevo, total, pc, pt, okCons, okTotal, cumple: okCons && okTotal && !sinNorma, maxNueva, limitaVivienda: maxTotal < maxCons };
+  return { mensual, anual, cons, viv, soc, conVivienda: conVivienda && !sinNorma, sinNorma, tabla, tramo, limCons, limTotal, consNuevo, total, pc, pt, okCons, okTotal, cumple: okCons && okTotal && !sinNorma && !sinTarjetas, sinTarjetas, maxNueva, limitaVivienda: maxTotal < maxCons };
 }
 function pintaIngresos(V) {
   const ing = ingresosTotales(V);
@@ -378,12 +406,25 @@ function pintaIngresos(V) {
 function pintaTarjetas(V) {
   V.deudas.forEach((d, i) => {
     if (d.cod !== 'TC') return;
-    const t = tramoTC(num(d.limite));
+    const t = tcCalc(d);
     const c = $('#tcCuota_' + i), info = $('#tcInfo_' + i);
-    if (c) c.textContent = t ? `Bs ${nf2.format(cuotaDeuda(d))}` : '—';
+    if (c) c.textContent = t && !t.sinParam ? `Bs ${nf2.format(t.cuota)}` : '—';
     if (info) info.innerHTML = !t ? 'Ingresa el límite para calcular la cuota'
-      : `Límite Bs ${nf2.format(num(d.limite))} × ${t.pct}% = Bs ${nf2.format(cuotaDeuda(d))}${t.bajoMinimo ? ` · <span style="color:var(--red)">límite menor al mínimo de Bs ${nf0.format(VEH.tramosTC[0].desde)}</span>` : !t.exacto ? ' · entre tramos: se aplica el siguiente' : ''}`;
+      : t.sinParam ? '<span style="color:var(--red)">Faltan los parámetros de tarjetas (Más → Parámetros de productos)</span>'
+      : `Bs ${nf2.format(t.fijo)} + ${pctTC(t.pct)}% × Bs ${nf2.format(t.limite)} = Bs ${nf2.format(t.cuota)}${t.bajoMinimo ? ` · <span style="color:var(--red)">límite menor al mínimo de la categoría (Bs ${nf0.format(t.minimo)})</span>` : t.sobreTabla ? ` · por encima de la tabla (Bs ${nf0.format(t.maximo)}): se extiende la fórmula` : ''}`;
   });
+}
+function tcLimiteHtml(k) {
+  const L = limitesTC(k.maxNueva);
+  return `<details class="tc-lim" id="tcLim" ${UI.tcLimAbierto ? 'open' : ''}>
+    <summary>💳 ¿Cuánto límite de tarjeta le puedo dar?</summary>
+    ${!L ? '<div class="small muted" style="margin-top:6px">Faltan los parámetros de tarjetas en este dispositivo.</div>' : `
+    <div class="small muted" style="margin:6px 0">Con la cuota libre de <b class="num">Bs ${nf2.format(k.maxNueva)}</b> (deudas actuales, sin el crédito vehicular de esta simulación):</div>
+    ${L.map(c => `<div class="row between tc-lim-fila"><span>${esc(c.corto)}</span>${c.alcanza
+      ? `<b class="num">${c.tope ? `Bs ${nf0.format(c.tope)} o más` : `hasta Bs ${nf0.format(c.lim)}`}</b>`
+      : `<span class="small" style="color:var(--red)">No alcanza (mínimo Bs ${nf0.format(c.minimo)})</span>`}</div>`).join('')}
+    <div class="small muted" style="margin-top:6px">Si también toma el crédito vehicular, ambos comparten la misma capacidad de pago.</div>`}
+  </details>`;
 }
 function pintaCapacidad(V, cuotaNueva) {
   pintaIngresos(V);
@@ -395,7 +436,7 @@ function pintaCapacidad(V, cuotaNueva) {
   const barra = (pctUsado, limite, ok) => `<div class="bar" style="height:10px;margin-top:4px"><span style="width:${Math.min(100, pctUsado / limite * 100)}%;background:${ok ? 'var(--green-600)' : 'var(--red)'}"></span></div>`;
   box.innerHTML = `
   <div class="cap-box ${cuotaNueva ? (k.cumple ? 'ok' : 'no') : ''}">
-    <div class="row between"><b>Capacidad de pago</b>${cuotaNueva ? (k.sinNorma && k.okCons ? '<span class="badge gold">⚠️ Incompleto</span>' : `<span class="badge ${k.cumple ? '' : 'red'}">${k.cumple ? '✅ Cumple' : '❌ No cumple'}</span>`) : ''}</div>
+    <div class="row between"><b>Capacidad de pago</b>${cuotaNueva ? ((k.sinNorma || k.sinTarjetas) && k.okCons ? '<span class="badge gold">⚠️ Incompleto</span>' : `<span class="badge ${k.cumple ? '' : 'red'}">${k.cumple ? '✅ Cumple' : '❌ No cumple'}</span>`) : ''}</div>
     <div class="cap-linea">
       <div class="row between small"><span>TC + N${cuotaNueva ? ' + nuevo crédito' : ''}</span><span class="num"><b>${nf2.format(k.pc)}%</b> de ${k.limCons}%</span></div>
       ${barra(k.pc, k.limCons, k.okCons)}
@@ -407,8 +448,10 @@ function pintaCapacidad(V, cuotaNueva) {
       <div class="small muted num">Bs ${nf2.format(k.total)} de Bs ${nf2.format(k.anual * k.limTotal / 100)} · sobre el ingreso anual mensualizado Bs ${nf2.format(k.anual)}</div>
       <div class="small muted">${esc(k.tabla.nombre)} · ingreso ${k.tramo.txt} → ${k.limTotal}%</div>
     </div>` : ''}
+    ${k.sinTarjetas ? '<div class="small" style="margin-top:8px;color:var(--red)">⚠️ Las tarjetas no suman su cuota: faltan los parámetros de tarjetas en este dispositivo.</div>' : ''}
     ${k.sinNorma ? '<div class="small" style="margin-top:8px;color:var(--red)">⚠️ No se evaluó el límite total con vivienda: faltan los parámetros de la norma en este dispositivo (inicia sesión con internet o cárgalos en Más → Parámetros de productos).</div>' : ''}
     <div class="row between" style="margin-top:10px"><span class="small">Cuota máxima para el nuevo crédito${k.conVivienda && k.limitaVivienda ? '<br><span class="muted">(la limita el total con vivienda)</span>' : ''}</span><b class="num">Bs ${nf2.format(k.maxNueva)}</b></div>
+    ${tcLimiteHtml(k)}
     ${cuotaNueva ? `<div class="row between"><span class="small">Cuota del vehículo (la más alta)</span><b class="num" style="color:${k.cumple ? 'var(--green-600)' : 'var(--red)'}">Bs ${nf2.format(cuotaNueva)}</b></div>` : ''}
   </div>`;
   return k;
@@ -602,7 +645,7 @@ function vehCalc() {
       ${primaMSC ? `<dt>Seguro vehicular BMSC (${nf2.format(pctMSC)}%)</dt><dd class="num">+ ${fmt(primaMSC, m)}</dd>` : ''}
       <dt><b>Monto a financiar</b></dt><dd class="num"><b>${fmt(monto, m)}</b></dd>
       <dt>Plazo</dt><dd>${plazo} meses (${plazo / 12} ${plazo === 12 ? 'año' : 'años'})</dd>
-      ${cap && cap.mensual ? `<dt>Capacidad de pago</dt><dd>${cap.sinNorma && cap.okCons ? '⚠️ Incompleto (faltan parámetros de la norma)' : cap.cumple ? '✅ Cumple' : '❌ No cumple'} · máx. Bs ${nf2.format(cap.maxNueva)}</dd>` : ''}
+      ${cap && cap.mensual ? `<dt>Capacidad de pago</dt><dd>${(cap.sinNorma || cap.sinTarjetas) && cap.okCons ? '⚠️ Incompleto (faltan parámetros)' : cap.cumple ? '✅ Cumple' : '❌ No cumple'} · máx. Bs ${nf2.format(cap.maxNueva)}</dd>` : ''}
       <dt>Desgravamen</dt><dd>${esc(desgTxt)}</dd>
       <dt>DIMA</dt><dd>${dima ? esc(dimaTxt) : 'No'}</dd>
     </dl>
@@ -643,6 +686,7 @@ ROUTES.calculadora.after = () => {
   const form = $('#vehForm');
   if (!form) return;
   $('#simsHist')?.addEventListener('toggle', e => { UI.simsAbierto = e.target.open; });
+  $('#vehForm')?.addEventListener('toggle', e => { if (e.target.id === 'tcLim') UI.tcLimAbierto = e.target.open; }, true);
   const rerender = ['codeudor', 'plazo', 'tipoT', 'tipoC', 'vivienda', 'ingC', 'primas'];
   // (motor, estado y seguro automotor se recalculan sin redibujar)
   const onChange = e => {
