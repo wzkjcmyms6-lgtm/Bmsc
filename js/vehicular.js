@@ -4,7 +4,8 @@
 'use strict';
 
 const VEH = {
-  edadMax: { anios: 70, dias: 360 },          // hasta 70 años y 360 días (sin cumplir 71)
+  edadMax: { anios: 70, dias: 360 },          // desgravamen: hasta 70 años y 360 días (sin cumplir 71)
+  edadCredito: 76,                            // el crédito no puede pasar de los 76 años del mayor
   desgravamen: { titular: 1.250, mancomunado: 2.251 }, // % sobre saldo capital
   dima: { titular: 0.36, mancomunado: 0.72 },          // % sobre saldo capital
   periodoSeguros: 12,                          // los % de seguros son anuales → se cobran /12 cada mes
@@ -96,7 +97,7 @@ function vehForm() {
       </div>
       <div class="fields-2">
         ${field({ label: 'Aporte propio %', name: 'aportePct', type: 'money', value: V.aportePct })}
-        ${field({ label: 'Plazo (meses)', name: 'plazo', type: 'select', value: V.plazo, options: VEH.plazos.map(n => ({ v: n, l: `${n} meses` })), hint: `${num(V.plazo) / 12} ${num(V.plazo) === 12 ? 'año' : 'años'}` })}
+        ${field({ label: 'Plazo (meses)', name: 'plazo', type: 'select', value: V.plazo, options: VEH.plazos.map(n => ({ v: n, l: `${n} meses` })), hint: `<span id="plazoInfo"></span>` })}
       </div>
       <div class="fields-2">
         ${field({ label: 'Interés fijo % anual', name: 'tasaFija', type: 'money', value: V.tasaFija })}
@@ -124,23 +125,25 @@ function vehCalc() {
   const pintaEdad = (id, e) => { const b = $('#' + id); if (!b) return; b.textContent = e ? edadTxt(e) : 'Edad —'; b.className = 'badge ' + (!e ? 'gray' : elegible(e) ? '' : 'red'); };
   pintaEdad('edad_t', eT); pintaEdad('edad_c', eC);
 
-  // Desgravamen según edad (hasta 70 años y 360 días)
-  // Regla: si cualquiera de los dos supera 70 años y 360 días, no hay desgravamen para nadie (ni DIMA)
-  const okT = elegible(eT), okC = !conCodeudor || elegible(eC);
+  // Desgravamen según edad (hasta 70 años y 360 días): cubre solo a quien cumple la edad.
+  // Si cumplen los dos → tasa mancomunada; si cumple uno → tasa individual; si ninguno → sin desgravamen.
+  const okT = elegible(eT), okC = conCodeudor && elegible(eC);
   const fechasCompletas = !!eT && (!conCodeudor || !!eC);
-  const aplica = fechasCompletas && okT && okC;
+  const cubiertos = [okT && 'Titular', okC && 'Codeudor'].filter(Boolean);
+  const aplica = fechasCompletas && cubiertos.length > 0;
+  const ambos = cubiertos.length === 2;
   let desg = 0, desgTxt = '';
-  if (aplica) { desg = conCodeudor ? VEH.desgravamen.mancomunado : VEH.desgravamen.titular; desgTxt = `${conCodeudor ? 'Titular y codeudor' : 'Solo titular'} · ${pct3(desg)}%`; }
+  if (aplica) { desg = ambos ? VEH.desgravamen.mancomunado : VEH.desgravamen.titular; desgTxt = `${ambos ? 'Titular y codeudor' : 'Solo ' + cubiertos[0].toLowerCase()} · ${pct3(desg)}%`; }
   else if (fechasCompletas) desgTxt = 'No aplica (supera la edad máxima)';
   else desgTxt = 'Falta fecha de nacimiento';
-  // DIMA: solo existe si hay desgravamen, y es a elección
-  const dima = aplica && V.dima === 'si' ? (conCodeudor ? VEH.dima.mancomunado : VEH.dima.titular) : 0;
+  // DIMA: solo existe si hay desgravamen, es a elección y cubre a las mismas personas
+  const dima = aplica && V.dima === 'si' ? (ambos ? VEH.dima.mancomunado : VEH.dima.titular) : 0;
   $$('#vehForm input[name=dima]').forEach(r => { r.disabled = !aplica; });
   const dimaRow = $('#dimaRow');
   if (dimaRow) {
     dimaRow.classList.toggle('veh-off', !aplica);
     $('#dimaInfo').textContent = aplica
-      ? `${conCodeudor ? `Titular y codeudor ${pct3(VEH.dima.mancomunado)}%` : `Solo titular ${pct3(VEH.dima.titular)}%`} sobre saldo capital`
+      ? `${ambos ? `Titular y codeudor ${pct3(VEH.dima.mancomunado)}%` : `Solo ${cubiertos[0].toLowerCase()} ${pct3(VEH.dima.titular)}%`} sobre saldo capital`
       : 'Solo disponible si aplica el desgravamen';
   }
   const badge = $('#desgBadge');
@@ -153,7 +156,28 @@ function vehCalc() {
   const aporte = valor * num(V.aportePct) / 100;
   const primaMSC = V.msc === 'si' ? valor * VEH.msc[V.motor] / 100 : 0;
   const monto = valor - aporte + primaMSC;
+  // Plazo máximo: el crédito debe terminar antes de que el mayor de los dos pase los 76 años
+  const fechas = [V.fnac, conCodeudor ? V.cFnac : null].map(parseDate).filter(Boolean);
+  const mayor = fechas.length ? new Date(Math.min(...fechas)) : null;
+  let plazoMax = VEH.plazos.at(-1);
+  if (mayor) {
+    const hoy = parseDate(today());
+    const limite = new Date(mayor.getFullYear() + VEH.edadCredito, mayor.getMonth(), mayor.getDate());
+    let meses = (limite.getFullYear() - hoy.getFullYear()) * 12 + (limite.getMonth() - hoy.getMonth());
+    if (limite.getDate() < hoy.getDate()) meses--;
+    plazoMax = Math.min(plazoMax, Math.max(0, Math.floor(meses / 12) * 12));
+  }
+  const sel = $('#vehForm [name=plazo]');
+  if (sel) [...sel.options].forEach(o => { o.disabled = +o.value > plazoMax; });
+  const plazoPedido = parseInt(V.plazo, 10) || 12;
+  if (plazoMax >= 12 && plazoPedido > plazoMax) {
+    V.plazo = plazoMax; V.plazoAjustado = true; if (sel) sel.value = plazoMax;
+    if (num(V.periodoFijo) > plazoMax) { V.periodoFijo = plazoMax; const pf = $('#vehForm [name=periodoFijo]'); if (pf) pf.value = plazoMax; }
+    guardarCalc();
+  }
   const plazo = parseInt(V.plazo, 10) || 12;
+  const plazoInfo = $('#plazoInfo');
+  if (plazoInfo) plazoInfo.textContent = mayor ? `Máximo ${plazoMax} meses (hasta ${VEH.edadCredito} años del mayor)` : '';
   const fijo = Math.min(plazo, Math.max(0, parseInt(V.periodoFijo, 10) || 0));
   const tasaVar = treMN() + num(V.margenVar);
   const tv = $('#tasaVarInfo');
@@ -164,8 +188,10 @@ function vehCalc() {
   const avisos = [];
   if (!V.fnac) avisos.push('Ingresa la fecha de nacimiento del titular (obligatoria).');
   if (conCodeudor && !V.cFnac) avisos.push('Ingresa la fecha de nacimiento del codeudor (obligatoria).');
-  if (eT && !okT) avisos.push(`El titular supera la edad máxima (${edadTxt(eT)}): el crédito va sin desgravamen ni DIMA.`);
-  if (conCodeudor && eC && !okC) avisos.push(`El codeudor supera la edad máxima (${edadTxt(eC)}): el crédito va sin desgravamen ni DIMA.`);
+  if (eT && !okT) avisos.push(`El titular supera la edad para desgravamen (${edadTxt(eT)}): no tendrá desgravamen ni DIMA.`);
+  if (conCodeudor && eC && !okC) avisos.push(`El codeudor supera la edad para desgravamen (${edadTxt(eC)}): no tendrá desgravamen ni DIMA.`);
+  if (mayor && plazoMax < 12) avisos.push(`El mayor de los clientes ya no puede tomar un crédito de al menos 12 meses sin pasar los ${VEH.edadCredito} años.`);
+  else if (mayor && V.plazoAjustado && plazo === plazoMax) avisos.push(`Plazo ajustado a ${plazoMax} meses: el crédito no puede pasar de los ${VEH.edadCredito} años del mayor.`);
   if (num(V.periodoFijo) > plazo) avisos.push(`El periodo de tasa fija no puede superar el plazo (${plazo} meses).`);
   if (!(monto > 0)) { out.innerHTML = '<div class="card empty">Ingresa el valor del vehículo</div>'; return; }
 
@@ -248,7 +274,7 @@ ROUTES.calculadora.after = () => {
   const rerender = ['codeudor', 'msc', 'plazo'];
   const onChange = e => {
     Object.entries(formData(form)).forEach(([k, v]) => { V[k] = v; });
-    if (e.target.name === 'plazo' && num(V.periodoFijo) > num(V.plazo)) V.periodoFijo = V.plazo;
+    if (e.target.name === 'plazo') { V.plazoAjustado = false; if (num(V.periodoFijo) > num(V.plazo)) V.periodoFijo = V.plazo; }
     guardarCalc();
     if (rerender.includes(e.target.name)) { render(); return; }
     vehCalc();
