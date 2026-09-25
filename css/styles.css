@@ -551,3 +551,9 @@ tr[data-act] td { cursor: pointer; }
 .sim-guardar { display: grid; gap: 8px; }
 .sim-guardar-row { display: flex; gap: 8px; }
 .sim-guardar-row input { flex: 1; min-width: 0; padding: 11px 12px; border-radius: 11px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font-size: 16px; font-family: inherit; }
+
+/* Ingreso anual mensualizado (base del límite con vivienda) */
+.veh-valor-sec { background: var(--surface-2); }
+.veh-valor-sec b { font-size: 17px; }
+table.tbl.tabla-norma th, table.tbl.tabla-norma td { padding: 6px 4px; font-size: 12px; }
+table.tbl.tabla-norma th { white-space: normal; line-height: 1.2; vertical-align: bottom; }

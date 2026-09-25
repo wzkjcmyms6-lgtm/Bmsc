@@ -662,8 +662,40 @@ ROUTES.parametros.render = () => {
     </div>
     <button class="btn primary block" type="submit">Guardar parámetros</button>
     <button class="btn ghost block" type="button" id="paramReset" style="margin-top:6px">Restablecer valores referenciales</button>
-  </form>`;
+  </form>
+  ${normasCard()}`;
 };
+
+/* Normas internas (uso interno del banco): se guardan en Firebase, no en el código público.
+   Solo el administrador puede cargarlas; los demás usuarios las leen al iniciar sesión. */
+function normasCard() {
+  const n = S().settings.normas?.endeudamiento;
+  const estado = window.Nube?.normasEstado;
+  return `
+  <div class="section-title">Normas internas (protegidas)</div>
+  <div class="card">
+    <div class="small">${n
+      ? `✅ Norma de endeudamiento cargada${n.version ? ' · versión ' + esc(n.version) : ''}${n.vigencia ? ' · vigente desde ' + esc(fmtDate(n.vigencia)) : ''}`
+      : '⚠️ La norma de endeudamiento no está cargada en este dispositivo.'}</div>
+    ${estado === 'sin-permiso' ? '<div class="small" style="color:var(--red);margin-top:4px">Firebase no permite leer las normas: falta publicar la regla de «config».</div>' : ''}
+    <div class="small muted" style="margin-top:6px">Se guardan en la nube (no en el código de la app) y solo se ven después de iniciar sesión. Al cerrar sesión se borran del dispositivo.</div>
+    <details style="margin-top:8px"><summary class="link" style="cursor:pointer">Cargar o actualizar (solo administrador)</summary>
+      <div class="field" style="margin-top:8px"><label for="normasTxt">Código de parámetros</label>
+        <textarea id="normasTxt" rows="5" placeholder='{"endeudamiento": { … }}' autocomplete="off" spellcheck="false"></textarea></div>
+      <button type="button" class="btn primary block" id="normasGuardar">Guardar en la nube</button>
+    </details>
+  </div>`;
+}
+function validarNormas(txt) {
+  let d;
+  try { d = JSON.parse(txt); } catch { throw new Error('El código no es válido: revisa que esté completo'); }
+  const e = d && d.endeudamiento;
+  const tramoOk = t => t && (t.hasta === null || isFinite(t.hasta)) && isFinite(t.pct);
+  const ok = e && isFinite(e.consumo) && e.tablas && ['vivienda', 'socialMayor', 'socialMenor']
+    .every(k => Array.isArray(e.tablas[k]) && e.tablas[k].length && e.tablas[k].every(tramoOk));
+  if (!ok) throw new Error('Al código le faltan datos de la norma de endeudamiento');
+  return d;
+}
 ROUTES.parametros.after = () => {
   $('#paramForm').addEventListener('submit', ev => {
     ev.preventDefault();
@@ -678,6 +710,21 @@ ROUTES.parametros.after = () => {
     S().settings.ufvManual = num(d.ufvManual) || '';
     S().settings.treManual = num(d.treManual) || '';
     Store.save(); toast('Parámetros guardados');
+  });
+  $('#normasGuardar')?.addEventListener('click', async () => {
+    const btn = $('#normasGuardar');
+    let d;
+    try { d = validarNormas($('#normasTxt').value.trim()); } catch (e) { toast(e.message); return; }
+    d.actualizado = new Date().toISOString();
+    btn.disabled = true; btn.textContent = 'Guardando…';
+    try {
+      await window.Nube.guardarNormas(d);
+      S().settings.normas = d; Store.save();
+      toast('Normas guardadas en la nube'); render();
+    } catch (e) {
+      toast(e.code === 'permission-denied' ? 'Sin permiso: publica la regla nueva en Firebase y usa el usuario administrador' : e.message);
+      btn.disabled = false; btn.textContent = 'Guardar en la nube';
+    }
   });
   $('#paramReset').addEventListener('click', () => {
     if (!confirm('¿Volver a los valores referenciales?')) return;

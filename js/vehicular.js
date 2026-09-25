@@ -11,14 +11,25 @@ const VEH = {
   periodoSeguros: 12,                          // los % de seguros son anuales → se cobran /12 cada mes
   msc: { gasolina: 3.8, hibrido: 3.8 },        // % del valor del vehículo, se suma al monto a financiar
   plazos: [12, 24, 36, 48, 60, 72, 84, 96, 108, 120],
-  // Servicio de deudas: % máximo del sueldo bruto (sumado titular + codeudor)
+  // Servicio de deudas: códigos de las deudas actuales del cliente
   codigos: [
     { v: 'TC', l: 'TC · Tarjeta de crédito', g: 'consumo' },
     { v: 'N', l: 'N · Otros créditos', g: 'consumo' },
     { v: 'H0', l: 'H0 · Vivienda', g: 'vivienda' }, { v: 'H1', l: 'H1 · Vivienda', g: 'vivienda' }, { v: 'H2', l: 'H2 · Vivienda', g: 'vivienda' },
     { v: 'H3', l: 'H3 · Vivienda social', g: 'social' }, { v: 'H4', l: 'H4 · Vivienda social', g: 'social' }
   ],
-  limite: { consumo: 25, vivienda: 40, social: 37 },
+  // Norma de endeudamiento para asalariados:
+  //  1) TC, N y el crédito nuevo (sin contar vivienda): hasta 25% del ingreso mensual líquido.
+  //  2) Con créditos de vivienda: el total de deudas (actuales + nueva) no debe pasar el % de la tabla
+  //     según el ingreso anual mensualizado (líquido + aguinaldo, primas y bonos ÷ 12).
+  //  Los % de las tablas son de uso interno: no están en este código. Se leen de Firebase (config/normas)
+  //  después de iniciar sesión y se cargan desde Más → Parámetros de productos.
+  limite: { consumo: 25 },
+  tablasVivienda: {
+    vivienda: { nombre: 'Vivienda (H0–H2)', corto: 'Vivienda' },
+    socialMayor: { nombre: 'Vivienda social con aporte propio ≥ 20%', corto: 'Social ≥ 20%' },
+    socialMenor: { nombre: 'Vivienda social con aporte propio < 20%', corto: 'Social < 20%' }
+  },
   // Tarjetas de crédito: cuota a considerar = % del límite según tramo
   tarjetas: [['visa', 'Visa Internacional'], ['master', 'Mastercard Clásica']],
   tramosTC: [
@@ -26,7 +37,7 @@ const VEH = {
     { desde: 3730, hasta: 5290, pct: 7 }, { desde: 5300, hasta: 9150, pct: 6 }, { desde: 9160, hasta: 33900, pct: 5 },
     { desde: 40000, hasta: Infinity, pct: 4 }
   ],
-  impuestoExterior: 13,                        // % que se descuenta a ingresos del exterior (referencial)  // vivienda y social incluyen el 25% de consumo
+  impuestoExterior: 13,                        // % que se descuenta a ingresos del exterior (referencial)
   treMN: 3.65, treVigencia: 'septiembre 2026'  // TRe MN publicada por el BCB (respaldo)
 };
 const pct3 = v => new Intl.NumberFormat('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(v);
@@ -54,7 +65,7 @@ function vehState() {
     desgT: '', desgC: '', dimaT: '', dimaC: '',
     tasaFija: 9, margenVar: 3, plazo: 60, periodoFijo: 24,
     estado: 'nuevo', motor: 'gasolina', valorUsd: 15000, tcVeh: '', msc: 'no',
-    tipoT: 'sueldo', montoT: '', otrosT: '', tipoC: 'sueldo', montoC: '', otrosC: '', vivienda: 'no', aguinaldo: 'no', primas: 'no', primasT: '', primasC: '', ingC: 'no', deudas: [], compra: ''
+    tipoT: 'sueldo', montoT: '', otrosT: '', tipoC: 'sueldo', montoC: '', otrosC: '', vivienda: 'no', aguinaldo: 'no', primas: 'no', primasT: '', primasC: '', aporteSocial: 'menor', ingC: 'no', deudas: [], compra: ''
   };
   const V = C.veh;
   if (V.motor !== 'hibrido') V.motor = 'gasolina';
@@ -123,8 +134,10 @@ function ingresosTotales(V) {
   // Primas y bonos: también solo con crédito de vivienda (BMSC u otros bancos); monto anual ÷ 12
   // Se suman tal cual (sin descuentos), cada persona con su propio monto
   const primas = V.vivienda === 'si' && V.primas === 'si' ? (num(V.primasT) + (c ? num(V.primasC) : 0)) / 12 : 0;
-  const extra = agui + primas;
-  return { t, c, agui, primas, computable: t.computable + (c ? c.computable : 0) + extra, liquido: t.liquido + (c ? c.liquido : 0) + extra };
+  // mensual: base del 25% (sin aguinaldo, primas ni bonos anuales)
+  // anual: ingreso anual menos descuentos de ley, mensualizado → base del límite total con vivienda
+  const mensual = t.computable + (c ? c.computable : 0);
+  return { t, c, agui, primas, mensual, anual: mensual + agui + primas };
 }
 
 function vehForm() {
@@ -196,7 +209,9 @@ function vehForm() {
         ${field({ label: 'Titular: primas y bonos del año (Bs)', name: 'primasT', type: 'money', value: V.primasT })}
         ${V.codeudor === 'si' && V.ingC === 'si' ? field({ label: 'Codeudor: primas y bonos del año (Bs)', name: 'primasC', type: 'money', value: V.primasC }) : ''}
       </div>` : ''}` : ''}
-      <div class="veh-valor-bs"><span class="small muted" id="ingEtiq">Ingreso computable (líquido)</span><b class="num" id="ingTotal">—</b></div>
+      <div class="veh-valor-bs"><span class="small muted" id="ingEtiq">Ingreso mensual (líquido)</span><b class="num" id="ingTotal">—</b></div>
+      ${V.vivienda === 'si' ? `<div class="veh-valor-bs veh-valor-sec"><span class="small muted" id="ingAnualEtiq">Ingreso anual mensualizado</span><b class="num" id="ingAnual">—</b></div>
+      <div class="small muted">El 25% (TC, N y crédito nuevo) se calcula sobre el ingreso mensual. El aguinaldo, las primas y los bonos solo cuentan para el límite total con vivienda.</div>` : ''}
     `)}
 
     ${seccion(6, 'Servicio de deudas mensual', `
@@ -217,10 +232,12 @@ function vehForm() {
           </div>` : ''}
         </div>`).join('') || '<div class="small muted" style="padding:6px 0">Sin deudas registradas.</div>'}</div>
       <button type="button" class="btn sm" data-act="vehDeudaAdd" style="margin-top:8px">${ICONS.plus} Agregar deuda</button>
+      ${V.deudas.some(d => grupoDe(d.cod) === 'social') ? `<div class="veh-row" style="margin-top:6px"><div><span>Vivienda social: aporte propio</span><div class="small muted">Del crédito H3–H4 · define la tabla del límite total</div></div>${opciones('aporteSocial', V.aporteSocial === 'mayor' ? 'mayor' : 'menor', [['mayor', '≥ 20%'], ['menor', '< 20%']])}</div>` : ''}
       <details class="small muted" style="margin-top:10px"><summary class="link" style="cursor:pointer">Cuota a considerar en tarjetas (% del límite)</summary>
         <table class="tbl num" style="margin-top:6px"><tbody>${VEH.tramosTC.map(t => `<tr><td>Bs ${nf0.format(t.desde)} ${t.hasta === Infinity ? 'en adelante' : 'a ' + nf0.format(t.hasta)}</td><td>${t.pct}%</td></tr>`).join('')}</tbody></table>
       </details>
-      <div class="small muted" style="margin-top:10px">TC y N: hasta ${VEH.limite.consumo}% del ingreso computable (líquido) · con H0–H2 el total hasta ${VEH.limite.vivienda}% · con H3–H4 hasta ${VEH.limite.social}% (incluyen el ${VEH.limite.consumo}%).</div>
+      <div class="small muted" style="margin-top:10px">TC, N y el crédito nuevo (sin contar vivienda): hasta ${VEH.limite.consumo}% del ingreso mensual líquido. Con créditos de vivienda, además el total de deudas no debe pasar el % de la tabla según el ingreso anual mensualizado.</div>
+      <details class="small muted" style="margin-top:6px"><summary class="link" style="cursor:pointer">% máximo del total de deudas con vivienda</summary>${tablaNormaVivienda()}</details>
       <div id="capBox"></div>
     `)}
 
@@ -275,25 +292,81 @@ const cuotaDeuda = d => {
 };
 
 /* Capacidad de pago según el servicio de deudas */
+const grupoDe = cod => (VEH.codigos.find(c => c.v === cod) || VEH.codigos[1]).g;
+/* Norma de endeudamiento cargada desde la nube (null si aún no está en este dispositivo).
+   Formato guardado: { consumo, tablas: { vivienda: [{ hasta, pct }, …], socialMayor: […], socialMenor: […] } }
+   (hasta = null → sin tope). */
+function normaEnd() {
+  const n = S().settings.normas?.endeudamiento;
+  if (!n || !n.tablas) return null;
+  const tablas = {};
+  for (const [k, info] of Object.entries(VEH.tablasVivienda)) {
+    const tramos = (n.tablas[k] || []).map(t => Array.isArray(t) ? { hasta: t[0], pct: t[1] } : t)
+      .map(t => ({ hasta: t.hasta == null ? Infinity : num(t.hasta), pct: num(t.pct) }));
+    if (!tramos.length) return null;
+    tablas[k] = { ...info, tramos };
+  }
+  return { consumo: num(n.consumo) || VEH.limite.consumo, tablas };
+}
+/* Tabla del límite total con vivienda: con deuda de vivienda social se usa la tabla social (la más estricta)
+   según el aporte propio de ese crédito; si no, la de vivienda. */
+function tablaVivienda(V, conSocial, N) {
+  const T = N.tablas;
+  return conSocial ? (V.aporteSocial === 'mayor' ? T.socialMayor : T.socialMenor) : T.vivienda;
+}
+function tramoVivienda(tabla, ingreso) {
+  let i = tabla.tramos.findIndex(t => ingreso <= t.hasta);
+  if (i < 0) i = tabla.tramos.length - 1;
+  const tr = tabla.tramos[i], desde = i > 0 ? tabla.tramos[i - 1].hasta : 0;
+  const txt = tr.hasta === Infinity ? `más de Bs ${nf0.format(desde)}` : desde ? `más de Bs ${nf0.format(desde)} hasta Bs ${nf0.format(tr.hasta)}` : `hasta Bs ${nf0.format(tr.hasta)}`;
+  return { ...tr, txt };
+}
+function tablaNormaVivienda() {
+  const N = normaEnd();
+  if (!N) return '<div style="margin-top:6px">⚠️ Los parámetros de la norma no están cargados en este dispositivo. Inicia sesión con internet o cárgalos en Más → Parámetros de productos.</div>';
+  const T = N.tablas, cols = [T.vivienda, T.socialMayor, T.socialMenor];
+  const filas = T.vivienda.tramos.map((t, i) => {
+    const desde = i ? T.vivienda.tramos[i - 1].hasta : 0;
+    const ref = t.hasta === Infinity ? desde + 1 : t.hasta;
+    const rango = !desde ? `≤ ${nf0.format(t.hasta)}` : t.hasta === Infinity ? `> ${nf0.format(desde)}` : `${nf0.format(desde)} – ${nf0.format(t.hasta)}`;
+    return `<tr><td>${rango}</td>${cols.map(tb => `<td>${tramoVivienda(tb, ref).pct}%</td>`).join('')}</tr>`;
+  }).join('');
+  return `<div class="table-wrap" style="margin-top:6px"><table class="tbl num tabla-norma"><thead><tr><th>Ingreso (Bs)</th>${cols.map(tb => `<th>${esc(tb.corto)}</th>`).join('')}</tr></thead><tbody>${filas}</tbody></table></div>
+    <div style="margin-top:4px">Ingreso mensualizado = líquido + (aguinaldo + primas + bonos) ÷ 12. El % incluye todas las deudas: TC, N, vivienda y el crédito nuevo.</div>`;
+}
+/* Capacidad de pago según la norma de endeudamiento para asalariados:
+   1) TC + N + crédito nuevo ≤ 25% del ingreso mensual líquido (sin contar cuotas de vivienda).
+   2) Si tiene créditos de vivienda: total de deudas + crédito nuevo ≤ % de la tabla (A1, A2 o A3)
+      según el ingreso anual mensualizado. */
 function capacidadDeudas(V, cuotaNueva) {
-  const bruto = ingresosTotales(V).computable;
-  const grupo = cod => (VEH.codigos.find(c => c.v === cod) || VEH.codigos[1]).g;
-  const suma = g => V.deudas.filter(d => grupo(d.cod) === g).reduce((a, d) => a + cuotaDeuda(d), 0);
+  const { mensual, anual } = ingresosTotales(V);
+  const N = normaEnd();
+  const suma = g => V.deudas.filter(d => grupoDe(d.cod) === g).reduce((a, d) => a + cuotaDeuda(d), 0);
   const cons = suma('consumo'), viv = suma('vivienda'), soc = suma('social');
-  const limTotal = soc ? VEH.limite.social : viv ? VEH.limite.vivienda : VEH.limite.consumo;
+  const conVivienda = viv + soc > 0;
+  // Sin los parámetros de la norma no se puede evaluar el límite total con vivienda
+  const sinNorma = conVivienda && !N;
+  const tabla = N ? tablaVivienda(V, soc > 0, N) : null;
+  const tramo = tabla ? tramoVivienda(tabla, anual) : null;
+  const limCons = N ? N.consumo : VEH.limite.consumo, limTotal = tramo ? tramo.pct : 0;
   const consNuevo = cons + cuotaNueva;
   const total = consNuevo + viv + soc;
-  const pc = bruto ? consNuevo / bruto * 100 : 0, pt = bruto ? total / bruto * 100 : 0;
-  const okCons = pc <= VEH.limite.consumo + 1e-9, okTotal = pt <= limTotal + 1e-9;
-  const maxNueva = Math.max(0, Math.min(bruto * VEH.limite.consumo / 100 - cons, bruto * limTotal / 100 - (cons + viv + soc)));
-  return { bruto, cons, viv, soc, limTotal, consNuevo, total, pc, pt, okCons, okTotal, cumple: okCons && okTotal, maxNueva };
+  const pc = mensual ? consNuevo / mensual * 100 : 0, pt = anual ? total / anual * 100 : 0;
+  const okCons = pc <= limCons + 1e-9, okTotal = !conVivienda || sinNorma || pt <= limTotal + 1e-9;
+  const maxCons = mensual * limCons / 100 - cons;
+  const maxTotal = conVivienda && !sinNorma ? anual * limTotal / 100 - (cons + viv + soc) : Infinity;
+  const maxNueva = Math.max(0, Math.min(maxCons, maxTotal));
+  return { mensual, anual, cons, viv, soc, conVivienda: conVivienda && !sinNorma, sinNorma, tabla, tramo, limCons, limTotal, consNuevo, total, pc, pt, okCons, okTotal, cumple: okCons && okTotal && !sinNorma, maxNueva, limitaVivienda: maxTotal < maxCons };
 }
 function pintaIngresos(V) {
   const ing = ingresosTotales(V);
   const d = $('#ingDetT'); if (d) d.textContent = ing.t.detalle;
   const dc = $('#ingDetC'); if (dc && ing.c) dc.textContent = ing.c.detalle;
-  const tot = $('#ingTotal'); if (tot) tot.textContent = ing.computable ? `Bs ${nf2.format(ing.computable)}` : '—';
-  const et = $('#ingEtiq'); if (et) et.innerHTML = `Ingreso computable<span class="ing-comp">líquido${ing.agui ? ' + aguinaldo ÷ 12' : ''}${ing.primas ? ' + primas y bonos ÷ 12' : ''}</span>`;
+  const sumado = ing.c ? ' (titular + codeudor)' : '';
+  const tot = $('#ingTotal'); if (tot) tot.textContent = ing.mensual ? `Bs ${nf2.format(ing.mensual)}` : '—';
+  const et = $('#ingEtiq'); if (et) et.innerHTML = `Ingreso mensual líquido${sumado}<span class="ing-comp">base del ${VEH.limite.consumo}% (TC, N y crédito nuevo)</span>`;
+  const ta = $('#ingAnual'); if (ta) ta.textContent = ing.anual ? `Bs ${nf2.format(ing.anual)}` : '—';
+  const ea = $('#ingAnualEtiq'); if (ea) ea.innerHTML = `Ingreso anual mensualizado${sumado}<span class="ing-comp">líquido${ing.agui ? ' + aguinaldo ÷ 12' : ''}${ing.primas ? ' + primas y bonos ÷ 12' : ''} · base del límite con vivienda</span>`;
   const pi = $('#primasInfo'); if (pi) pi.textContent = ing.primas ? `Mensualizado: + Bs ${nf2.format(ing.primas)} (anual ÷ 12, sin descuentos)` : 'Monto anual de cada persona, sin descuentos, ÷ 12';
   const ai = $('#aguiInfo');
   if (ai) ai.textContent = ing.agui ? `Aguinaldo mensualizado: + Bs ${nf2.format(ing.agui)} (sueldo ÷ 12)` : 'Un sueldo al año, mensualizado (÷ 12) · solo ingresos por sueldo';
@@ -315,23 +388,24 @@ function pintaCapacidad(V, cuotaNueva) {
   const box = $('#capBox');
   if (!box) return null;
   const k = capacidadDeudas(V, cuotaNueva);
-  if (!k.bruto) { box.innerHTML = '<div class="card empty small" style="margin:12px 0 0">Ingresa los ingresos (sección 5) para evaluar la capacidad de pago.</div>'; return k; }
+  if (!k.mensual) { box.innerHTML = '<div class="card empty small" style="margin:12px 0 0">Ingresa los ingresos (sección 5) para evaluar la capacidad de pago.</div>'; return k; }
   const barra = (pctUsado, limite, ok) => `<div class="bar" style="height:10px;margin-top:4px"><span style="width:${Math.min(100, pctUsado / limite * 100)}%;background:${ok ? 'var(--green-600)' : 'var(--red)'}"></span></div>`;
   box.innerHTML = `
   <div class="cap-box ${cuotaNueva ? (k.cumple ? 'ok' : 'no') : ''}">
-    <div class="row between"><b>Capacidad de pago</b>${cuotaNueva ? `<span class="badge ${k.cumple ? '' : 'red'}">${k.cumple ? '✅ Cumple' : '❌ No cumple'}</span>` : ''}</div>
-    <div class="small muted">Ingreso computable${V.codeudor === 'si' && V.ingC === 'si' ? ' sumado' : ''}: <b class="num">Bs ${nf2.format(k.bruto)}</b></div>
+    <div class="row between"><b>Capacidad de pago</b>${cuotaNueva ? (k.sinNorma && k.okCons ? '<span class="badge gold">⚠️ Incompleto</span>' : `<span class="badge ${k.cumple ? '' : 'red'}">${k.cumple ? '✅ Cumple' : '❌ No cumple'}</span>`) : ''}</div>
     <div class="cap-linea">
-      <div class="row between small"><span>TC + N${cuotaNueva ? ' + nuevo crédito' : ''}</span><span class="num"><b>${nf2.format(k.pc)}%</b> de ${VEH.limite.consumo}%</span></div>
-      ${barra(k.pc, VEH.limite.consumo, k.okCons)}
-      <div class="small muted num">Bs ${nf2.format(k.consNuevo)} de Bs ${nf2.format(k.bruto * VEH.limite.consumo / 100)}</div>
+      <div class="row between small"><span>TC + N${cuotaNueva ? ' + nuevo crédito' : ''}</span><span class="num"><b>${nf2.format(k.pc)}%</b> de ${k.limCons}%</span></div>
+      ${barra(k.pc, k.limCons, k.okCons)}
+      <div class="small muted num">Bs ${nf2.format(k.consNuevo)} de Bs ${nf2.format(k.mensual * k.limCons / 100)} · sobre el ingreso mensual Bs ${nf2.format(k.mensual)}</div>
     </div>
-    ${k.limTotal !== VEH.limite.consumo ? `<div class="cap-linea">
-      <div class="row between small"><span>Total con vivienda${k.soc ? ' social' : ''}</span><span class="num"><b>${nf2.format(k.pt)}%</b> de ${k.limTotal}%</span></div>
+    ${k.conVivienda ? `<div class="cap-linea">
+      <div class="row between small"><span>Total con vivienda</span><span class="num"><b>${nf2.format(k.pt)}%</b> de ${k.limTotal}%</span></div>
       ${barra(k.pt, k.limTotal, k.okTotal)}
-      <div class="small muted num">Bs ${nf2.format(k.total)} de Bs ${nf2.format(k.bruto * k.limTotal / 100)}</div>
+      <div class="small muted num">Bs ${nf2.format(k.total)} de Bs ${nf2.format(k.anual * k.limTotal / 100)} · sobre el ingreso anual mensualizado Bs ${nf2.format(k.anual)}</div>
+      <div class="small muted">${esc(k.tabla.nombre)} · ingreso ${k.tramo.txt} → ${k.limTotal}%</div>
     </div>` : ''}
-    <div class="row between" style="margin-top:10px"><span class="small">Cuota máxima para el nuevo crédito</span><b class="num">Bs ${nf2.format(k.maxNueva)}</b></div>
+    ${k.sinNorma ? '<div class="small" style="margin-top:8px;color:var(--red)">⚠️ No se evaluó el límite total con vivienda: faltan los parámetros de la norma en este dispositivo (inicia sesión con internet o cárgalos en Más → Parámetros de productos).</div>' : ''}
+    <div class="row between" style="margin-top:10px"><span class="small">Cuota máxima para el nuevo crédito${k.conVivienda && k.limitaVivienda ? '<br><span class="muted">(la limita el total con vivienda)</span>' : ''}</span><b class="num">Bs ${nf2.format(k.maxNueva)}</b></div>
     ${cuotaNueva ? `<div class="row between"><span class="small">Cuota del vehículo (la más alta)</span><b class="num" style="color:${k.cumple ? 'var(--green-600)' : 'var(--red)'}">Bs ${nf2.format(cuotaNueva)}</b></div>` : ''}
   </div>`;
   return k;
@@ -429,14 +503,14 @@ function vehCalc() {
   const cuotaMaxDe = pl => Math.max(pl.rows[0].total, fijo < plazo ? pl.rows[fijo].total : 0);
   const base = 100000, cuotaBase = cuotaMaxDe(planDe(base));
   const kMax = capacidadDeudas(V, 0);
-  const montoMax = kMax.bruto && cuotaBase > 0 ? Math.floor(kMax.maxNueva / cuotaBase * base * 100) / 100 : 0;
+  const montoMax = kMax.mensual && cuotaBase > 0 ? Math.floor(kMax.maxNueva / cuotaBase * base * 100) / 100 : 0;
   const compraMax = Math.max(0, montoMax - primaMSC);
   const fm = $('#finMax');
-  if (fm) fm.innerHTML = !kMax.bruto
+  if (fm) fm.innerHTML = !kMax.mensual
     ? '<div class="fin-max vacio small">Ingresa los ingresos (sección 5) para calcular el monto máximo a financiar.</div>'
     : `<div class="fin-max ${compra > compraMax + 0.005 ? 'excede' : ''}">
         <div class="row between"><span>Monto máximo a financiar</span><b class="num">Bs ${nf2.format(montoMax)}</b></div>
-        <div class="small muted">Cuota máxima Bs ${nf2.format(kMax.maxNueva)} (capacidad de pago) · ${plazo} meses · ${nf2.format(num(V.tasaFija))}%${fijo < plazo ? ` / ${nf2.format(tasaVar)}%` : ''}${desg ? ' · con seguros' : ''}</div>
+        <div class="small muted">Cuota máxima Bs ${nf2.format(kMax.maxNueva)} (capacidad de pago${kMax.conVivienda && kMax.limitaVivienda ? ', limitada por el total con vivienda' : ''}${kMax.sinNorma ? ', sin evaluar el límite con vivienda' : ''}) · ${plazo} meses · ${nf2.format(num(V.tasaFija))}%${fijo < plazo ? ` / ${nf2.format(tasaVar)}%` : ''}${desg ? ' · con seguros' : ''}</div>
         ${primaMSC ? `<div class="small muted">− Seguro vehicular BMSC Bs ${nf2.format(primaMSC)}</div>` : ''}
         <div class="row between fin-max-compra"><span>Compra máxima de vehículo</span><b class="num">Bs ${nf2.format(compraMax)}</b></div>
         ${valor ? `<div class="small muted">${nf2.format(compraMax / valor * 100)}% del valor del vehículo${compraMax > valor ? ' · la capacidad alcanza para más que el valor del vehículo' : ''}</div>` : ''}
@@ -451,6 +525,9 @@ function vehCalc() {
   if (conCodeudor && eC && !okC) avisos.push(`El codeudor supera la edad para desgravamen (${edadTxt(eC)}): no puede llevar desgravamen ni DIMA.`);
   if (mayor && plazoMax < 12) avisos.push(`El mayor de los clientes ya no puede tomar un crédito de al menos 12 meses sin pasar los ${VEH.edadCredito} años.`);
   else if (mayor && V.plazoAjustado && plazo === plazoMax) avisos.push(`Plazo ajustado a ${plazoMax} meses: el crédito no puede pasar de los ${VEH.edadCredito} años del mayor.`);
+  const deudasViv = V.deudas.some(d => grupoDe(d.cod) !== 'consumo');
+  if (V.vivienda === 'si' && !deudasViv) avisos.push('Indicaste que tiene crédito de vivienda: registra su cuota en la sección 6 (códigos H0–H4) para aplicar el límite total con vivienda.');
+  if (V.vivienda !== 'si' && deudasViv) avisos.push('Registraste deudas de vivienda en la sección 6: en Ingresos marca "¿Tiene crédito de vivienda? Sí" si quieres tomar aguinaldo, primas o bonos.');
   if (num(V.periodoFijo) > plazo) avisos.push(`El periodo de tasa fija no puede superar el plazo (${plazo} meses).`);
   if (!(monto > 0)) {
     out.innerHTML = `
@@ -522,7 +599,7 @@ function vehCalc() {
       ${primaMSC ? `<dt>Seguro vehicular BMSC (${nf2.format(pctMSC)}%)</dt><dd class="num">+ ${fmt(primaMSC, m)}</dd>` : ''}
       <dt><b>Monto a financiar</b></dt><dd class="num"><b>${fmt(monto, m)}</b></dd>
       <dt>Plazo</dt><dd>${plazo} meses (${plazo / 12} ${plazo === 12 ? 'año' : 'años'})</dd>
-      ${cap && cap.bruto ? `<dt>Capacidad de pago</dt><dd>${cap.cumple ? '✅ Cumple' : '❌ No cumple'} · máx. Bs ${nf2.format(cap.maxNueva)}</dd>` : ''}
+      ${cap && cap.mensual ? `<dt>Capacidad de pago</dt><dd>${cap.sinNorma && cap.okCons ? '⚠️ Incompleto (faltan parámetros de la norma)' : cap.cumple ? '✅ Cumple' : '❌ No cumple'} · máx. Bs ${nf2.format(cap.maxNueva)}</dd>` : ''}
       <dt>Desgravamen</dt><dd>${esc(desgTxt)}</dd>
       <dt>DIMA</dt><dd>${dima ? esc(dimaTxt) : 'No'}</dd>
     </dl>

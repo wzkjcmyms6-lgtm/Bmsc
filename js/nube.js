@@ -28,6 +28,8 @@ const Nube = {
   proyecto: '',
   usuario: '',
   historial: async () => [],
+  normasEstado: '',         // '' | 'ok' | 'sin-permiso' | 'vacio'
+  guardarNormas: async () => { throw new Error('Inicia sesión con internet para guardar'); },
   sincronizarTodo: async () => {},
   cerrarSesion: async () => {}
 };
@@ -149,9 +151,25 @@ function redibujar() {
   }, 300);
 }
 
+/* Normas internas del banco (config/normas): no están en el código público; se leen al iniciar sesión
+   y quedan en el dispositivo mientras la sesión esté abierta (se borran al cerrar sesión). */
+function escucharNormas() {
+  desuscribir.push(fs.onSnapshot(fs.doc(db, 'config', 'normas'), snap => {
+    if (snap.metadata.fromCache && !snap.exists()) return;
+    const st = Store.get();
+    Nube.normasEstado = snap.exists() ? 'ok' : 'vacio';
+    const datos = snap.exists() ? snap.data() : null;
+    if (JSON.stringify(st.settings.normas || null) === JSON.stringify(datos)) return;
+    st.settings.normas = datos;
+    Store.save();
+    redibujar();
+  }, err => { Nube.normasEstado = esPermiso(err) ? 'sin-permiso' : 'error'; console.warn('Normas', err.code || err.message); }));
+}
+
 function escuchar() {
   desuscribir.forEach(f => f());
   desuscribir = [];
+  escucharNormas();
   for (const [key, nombre] of colsActivas()) {
     desuscribir.push(fs.onSnapshot(col(nombre), { includeMetadataChanges: true }, snap => {
       // Solo datos confirmados por el servidor (evita borrar la copia local con una caché vacía)
@@ -292,6 +310,10 @@ async function iniciar() {
     const snap = await fs.getDocs(q);
     return snap.docs.map(d => ({ id: d.id, ...d.data() }))
       .sort((a, b) => (b.fechaLocal || '').localeCompare(a.fechaLocal || ''));
+  };
+  Nube.guardarNormas = async datos => {
+    if (!uidActual) throw new Error('Inicia sesión para guardar');
+    await fs.setDoc(fs.doc(db, 'config', 'normas'), limpio(datos));
   };
   Nube.sincronizarTodo = () => subirTodo({ reemplazar: false, accion: 'sincronizar' });
   Nube.cerrarSesion = async () => {
