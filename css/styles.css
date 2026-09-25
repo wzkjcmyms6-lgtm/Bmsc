@@ -526,3 +526,11 @@ tr[data-act] td { cursor: pointer; }
 .fin-max.excede { border-color: var(--red); background: var(--red-soft); }
 .fin-max-aviso { color: var(--red); font-weight: 650; margin-top: 4px; }
 .fin-max.vacio { color: var(--muted); }
+
+/* Filas de ingresos: texto a la izquierda y Sí/No a la derecha, sin saltar de línea */
+#vehForm .veh-row { flex-wrap: nowrap; }
+#vehForm .veh-row > div:first-child { flex: 1; min-width: 0; }
+#vehForm .veh-row > .seg-toggle { flex-shrink: 0; }
+.veh-valor-bs b { white-space: nowrap; }
+.veh-valor-bs .ing-comp { font-size: 12px; display: block; }
+.veh-valor-bs { gap: 12px; }
