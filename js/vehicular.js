@@ -157,7 +157,10 @@ function vehForm() {
   <form id="vehForm" class="calc-form no-print" onsubmit="return false">
     <div class="veh-top card">
       <div><div class="small muted">Fecha de elaboración de la propuesta</div><b>${fmtDate(today())}</b></div>
-      <span class="badge">🚗 Crédito vehicular</span>
+      <div class="veh-top-der">
+        <span class="badge">🚗 Crédito vehicular</span>
+        <button type="button" class="btn sm veh-reset" data-act="vehSimNueva">↺ Resetear simulación</button>
+      </div>
     </div>
 
     ${seccion(1, 'Datos del cliente', `
@@ -704,7 +707,7 @@ Object.assign(ACTIONS, {
     UI.simsAbierto = true; render();
   },
   vehSimNueva: () => {
-    if (!confirm('¿Empezar una simulación nueva? Los datos actuales se borran del formulario (lo guardado en el historial se mantiene).')) return;
+    if (!confirm('¿Resetear la simulación? Se borran los datos del formulario (lo guardado en el historial se mantiene).')) return;
     calcState().veh = null; vehState(); UI.simsAbierto = false; guardarCalc(); render();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   },

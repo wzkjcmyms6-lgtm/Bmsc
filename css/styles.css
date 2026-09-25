@@ -557,3 +557,7 @@ tr[data-act] td { cursor: pointer; }
 .veh-valor-sec b { font-size: 17px; }
 table.tbl.tabla-norma th, table.tbl.tabla-norma td { padding: 6px 4px; font-size: 12px; }
 table.tbl.tabla-norma th { white-space: normal; line-height: 1.2; vertical-align: bottom; }
+
+/* Botón para resetear la simulación (arriba) */
+.veh-top-der { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.veh-reset { color: var(--red); border-color: var(--red-soft); white-space: nowrap; }
