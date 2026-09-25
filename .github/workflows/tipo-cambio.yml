@@ -1,0 +1,42 @@
+name: Tipo de cambio oficial (BCB)
+
+on:
+  schedule:
+    # El BCB publica el TCO a las 20:00 de Bolivia (00:00 UTC), a veces con atraso.
+    # Se revisa cada 15 min entre 19:30 y 23:45 (hora Bolivia) y de respaldo a las 08:00 y 14:00.
+    - cron: "30,45 23 * * *"
+    - cron: "*/15 0-3 * * *"
+    - cron: "0 12,18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tipo-cambio
+  cancel-in-progress: false
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: Bmsc
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Descargar TCO del BCB
+        run: node scripts/tipo-cambio.mjs
+      - name: Guardar cambios
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add data/tipo-cambio.json
+          if git diff --cached --quiet; then
+            echo "Sin cambios"
+          else
+            git commit -m "Tipo de cambio oficial $(TZ=America/La_Paz date +%F)"
+            git pull --rebase origin Bmsc
+            git push origin HEAD:Bmsc
+          fi

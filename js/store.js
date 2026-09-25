@@ -9,7 +9,10 @@ const Store = (() => {
     settings: {
       ejecutivo: '',
       agencia: '',
-      tc: 6.96,          // tipo de cambio Bs por 1 USD
+      tc: '',            // tipo de cambio manual (Bs por 1 USD)
+      tcModo: 'auto',    // 'auto' = TCO del BCB, 'manual' = valor fijo
+      tcTipo: 'tco',     // 'tco' (oficial), 'venta' (TCO + 0,10) o 'bmsc' (TCO del banco)
+      tcData: null,      // última descarga del TCO { dias: [...], obtenido }
       metaMensual: 0,    // meta de colocación mensual en Bs
       metaClientes: 0,   // meta de clientes nuevos al mes
       endeudamiento: 40, // % máximo de cuota / ingreso para la calculadora

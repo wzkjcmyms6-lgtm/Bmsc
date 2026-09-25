@@ -47,7 +47,72 @@ const compact = n => {
 const pct = (n, d = 1) => `${(n * 100).toFixed(d).replace('.', ',')}%`;
 const initials = name => String(name || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
 const S = () => Store.get();
-const tc = () => num(S().settings.tc) || 6.96;
+/* =========================================================
+   Tipo de cambio oficial (TCO) del Banco Central de Bolivia
+   El BCB lo publica cada día hábil a las 20:00 y rige desde el día hábil siguiente.
+   data/tipo-cambio.json se actualiza solo con GitHub Actions; como respaldo se
+   consulta una copia pública del mismo dato.
+   ========================================================= */
+const TC_RESPALDO = 12.22; // último valor conocido, solo si nunca se pudo descargar
+const TC_FUENTE_RESPALDO = 'https://raw.githubusercontent.com/frf88/tco-bolivia/main/data/tco_diario.csv';
+const TC_TIPOS = { tco: 'Oficial BCB (TCO)', venta: 'Venta referencial (TCO + 0,10)', bmsc: 'TCO del Banco Mercantil' };
+
+function tcDias() { return S().settings.tcData?.dias || []; }
+/* Cotización vigente hoy y, si ya se publicó, la de mañana */
+function tcEstado() {
+  const dias = tcDias();
+  const hoy = isoDate(new Date());
+  const vigente = [...dias].reverse().find(d => d.desde <= hoy) || dias[0] || null;
+  const proximo = dias.find(d => d.desde > hoy) || null;
+  const i = vigente ? dias.indexOf(vigente) : -1;
+  const anterior = i > 0 ? dias[i - 1] : null;
+  return { vigente, proximo, anterior };
+}
+const tcValor = (d, tipo = S().settings.tcTipo) => !d ? null : tipo === 'venta' ? d.venta : tipo === 'bmsc' ? (d.bmsc || d.tco) : d.tco;
+const tc = () => {
+  const st = S().settings;
+  if (st.tcModo === 'manual' && num(st.tc)) return num(st.tc);
+  return tcValor(tcEstado().vigente) || num(st.tc) || TC_RESPALDO;
+};
+const tcDescripcion = () => S().settings.tcModo === 'manual' && num(S().settings.tc)
+  ? 'tipo de cambio manual' : TC_TIPOS[S().settings.tcTipo] || TC_TIPOS.tco;
+
+async function descargarTC() {
+  const propia = fetch(`data/tipo-cambio.json?v=${Date.now()}`, { cache: 'no-store' })
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(j => j.dias || []);
+  const respaldo = fetch(TC_FUENTE_RESPALDO, { cache: 'no-store' })
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
+    .then(t => t.trim().split(/\r?\n/).slice(1).map(l => l.split(',')).filter(c => +c[3] > 0)
+      .map(([corte, desde, hasta, v]) => ({ corte, desde, hasta, tco: +v, venta: Math.round((+v + 0.1) * 100) / 100, bmsc: null })));
+  const [a, b] = await Promise.allSettled([propia, respaldo]);
+  const porCorte = new Map();
+  // Primero el respaldo y luego la fuente propia, que tiene prioridad (incluye TCO BMSC)
+  for (const r of [b, a]) if (r.status === 'fulfilled') r.value.forEach(d => d.corte && d.tco && porCorte.set(d.corte, { ...porCorte.get(d.corte), ...d, bmsc: d.bmsc ?? porCorte.get(d.corte)?.bmsc ?? null }));
+  const dias = [...porCorte.values()].sort((x, y) => x.corte.localeCompare(y.corte)).slice(-90);
+  if (!dias.length) throw new Error('sin datos');
+  return dias;
+}
+
+async function actualizarTC({ avisar = false } = {}) {
+  const st = S().settings;
+  try {
+    const antes = tc();
+    const ultimoAntes = tcDias().at(-1)?.corte;
+    const dias = await descargarTC();
+    st.tcData = { dias, obtenido: new Date().toISOString() };
+    Store.save();
+    const nuevoCorte = dias.at(-1).corte !== ultimoAntes;
+    if (Math.abs(tc() - antes) > 1e-9 || nuevoCorte || avisar) {
+      if (ultimoAntes && nuevoCorte) toast(`Dólar oficial actualizado: Bs ${nf2.format(tcValor(dias.at(-1)))}`);
+      else if (avisar) toast('Tipo de cambio al día');
+      if (!$('#sheet').classList.contains('hidden')) return; // no interrumpir un formulario abierto
+      render();
+    }
+  } catch (e) {
+    if (avisar) toast('Sin conexión: se usa el último tipo de cambio guardado');
+  }
+}
 const toBs = (amount, moneda) => (moneda === 'USD' ? amount * tc() : amount);
 
 const tipoInfo = id => CATALOG.tiposCredito.find(t => t.id === id) || { id, label: id || 'Otro', icon: '📄', color: '#6B7A73' };
@@ -290,7 +355,8 @@ const ROUTES = {
   'mas': { title: 'Más', nav: 'mas', render: viewMore },
   'calculadora': { title: 'Calculadoras', nav: 'mas', render: viewCalc, back: '#/mas' },
   'ajustes': { title: 'Ajustes', nav: 'mas', render: viewSettings, back: '#/mas' },
-  'respaldo': { title: 'Respaldo de datos', nav: 'mas', render: viewBackup, back: '#/mas' }
+  'respaldo': { title: 'Respaldo de datos', nav: 'mas', render: viewBackup, back: '#/mas' },
+  'tipo-cambio': { title: 'Dólar oficial', nav: 'inicio', render: viewTC, back: '#/' }
 };
 
 let current = { name: '', param: null };
@@ -324,6 +390,72 @@ $('#backBtn').addEventListener('click', () => {
 /* =========================================================
    Vista: Inicio
    ========================================================= */
+function tcCard() {
+  const { vigente, proximo, anterior } = tcEstado();
+  const manual = S().settings.tcModo === 'manual' && num(S().settings.tc);
+  if (!vigente && !manual) return `<a class="card row between" href="#/tipo-cambio" style="margin-top:10px">
+    <span>💵 Dólar oficial: obteniendo cotización del BCB…</span><span class="muted">${ICONS.chev}</span></a>`;
+  const v = tc();
+  const va = tcValor(anterior);
+  const diff = !manual && va ? v - va : 0;
+  const flecha = diff > 0 ? `<span style="color:var(--red)">▲ ${nf2.format(diff)}</span>` : diff < 0 ? `<span style="color:var(--green-600)">▼ ${nf2.format(-diff)}</span>` : '';
+  return `
+  <a class="card" href="#/tipo-cambio" style="display:block;margin-top:10px">
+    <div class="row between">
+      <div class="row"><div class="icon-dot">💵</div>
+        <div><div class="small muted">${manual ? 'Tipo de cambio manual' : 'Dólar oficial BCB · vigente hoy'}</div>
+        <div style="font-weight:800;font-size:19px" class="num">Bs ${nf2.format(v)} ${flecha ? `<span class="small">${flecha}</span>` : ''}</div></div>
+      </div>
+      <div class="right small muted">
+        ${!manual && vigente ? `Venta ${nf2.format(vigente.venta)}${vigente.bmsc ? `<br>BMSC ${nf2.format(vigente.bmsc)}` : ''}` : ''}
+      </div>
+    </div>
+    ${!manual && proximo ? `<div class="small" style="margin-top:8px;background:var(--gold-soft);padding:6px 10px;border-radius:8px">
+      Nuevo TCO publicado: <b class="num">Bs ${nf2.format(tcValor(proximo))}</b> rige desde ${fmtShort(proximo.desde)}</div>` : ''}
+  </a>`;
+}
+
+function viewTC() {
+  const st = S().settings;
+  const { vigente, proximo } = tcEstado();
+  const dias = tcDias().slice().reverse();
+  const manual = st.tcModo === 'manual' && num(st.tc);
+  return `
+  <div class="hero">
+    <div class="label">${manual ? 'Tipo de cambio manual en uso' : esc(TC_TIPOS[st.tcTipo]) + ' · vigente hoy'}</div>
+    <div class="big num">Bs ${nf2.format(tc())}</div>
+    ${vigente ? `<div class="meta">
+      <div><b class="num">${nf2.format(vigente.tco)}</b>TCO (compra)</div>
+      <div><b class="num">${nf2.format(vigente.venta)}</b>venta ref.</div>
+      ${vigente.bmsc ? `<div><b class="num">${nf2.format(vigente.bmsc)}</b>TCO BMSC</div>` : ''}
+    </div>` : '<div class="small">Aún no se pudo descargar la cotización del BCB.</div>'}
+  </div>
+  ${proximo ? `<div class="card" style="margin-top:10px;border-color:var(--gold)">
+    <b>Nuevo TCO publicado (corte ${fmtShort(proximo.corte)})</b>
+    <div class="small muted">Rige desde ${fmtDate(proximo.desde)}${proximo.hasta !== proximo.desde ? ' al ' + fmtDate(proximo.hasta) : ''}:
+    TCO <b class="num">${nf2.format(proximo.tco)}</b> · venta <b class="num">${nf2.format(proximo.venta)}</b>${proximo.bmsc ? ` · BMSC <b class="num">${nf2.format(proximo.bmsc)}</b>` : ''}</div>
+  </div>` : ''}
+  <div class="btn-row" style="margin-top:10px">
+    <button class="btn" data-act="refreshTC">↻ Actualizar ahora</button>
+    <a class="btn" href="#/ajustes">${ICONS.gear} Configurar</a>
+  </div>
+  <p class="small muted">El BCB publica el Tipo de Cambio Oficial cada día hábil a las 20:00 y rige desde el día hábil siguiente.
+  La app lo revisa sola al abrirse y cada 30 minutos.${st.tcData?.obtenido ? ` Última revisión: ${fmtShort(st.tcData.obtenido.slice(0, 10))} ${st.tcData.obtenido.slice(11, 16)} UTC.` : ''}</p>
+  ${dias.length ? `
+  <div class="section-title">Historial</div>
+  <div class="card tight"><div class="table-wrap" style="max-height:420px">
+    <table class="tbl num"><thead><tr><th>Rige desde</th><th>TCO</th><th>Var.</th><th>Venta</th><th>BMSC</th></tr></thead>
+    <tbody>${dias.slice(0, 60).map((d, i) => {
+      const prev = dias[i + 1];
+      const dv = prev ? d.tco - prev.tco : 0;
+      return `<tr><td>${fmtShort(d.desde)}${d === vigente ? ' •' : ''}</td><td><b>${nf2.format(d.tco)}</b></td>
+        <td style="color:${dv > 0 ? 'var(--red)' : dv < 0 ? 'var(--green-600)' : 'var(--muted)'}">${prev ? (dv > 0 ? '+' : '') + nf2.format(dv) : ''}</td>
+        <td>${nf2.format(d.venta)}</td><td>${d.bmsc ? nf2.format(d.bmsc) : '—'}</td></tr>`;
+    }).join('')}</tbody></table>
+  </div></div>` : ''}
+  <p class="small muted center">Fuente: <a class="link" href="https://www.bcb.gob.bo/tco_reporte_ultima_cotizacion.php" target="_blank" rel="noopener">Banco Central de Bolivia</a></p>`;
+}
+
 function viewHome() {
   const p = portfolio();
   const st = S().settings;
@@ -357,6 +489,8 @@ function viewHome() {
         <div class="small" style="margin-top:6px;opacity:.85">Bs ${nf0.format(col.total)} de Bs ${nf0.format(num(st.metaMensual))} · ${col.n} desembolsos</div>
       </div>` : ''}
   </div>
+
+  ${tcCard()}
 
   <div class="section-title">Accesos rápidos</div>
   <div class="action-grid">
@@ -488,7 +622,8 @@ function viewClients() {
   </div>
   <div id="clientList">${clientListHTML()}</div>
   <button class="btn primary block" data-act="newClient" style="margin-top:6px">${ICONS.plus} Registrar cliente</button>
-  <p class="small muted center" style="margin-top:14px">Clase A: clientes que suman el 80% de tu cartera · B: siguiente 15% · C: resto.</p>
+  <p class="small muted center" style="margin-top:14px">Clase A: clientes que suman el 80% de tu cartera · B: siguiente 15% · C: resto.<br>
+  Créditos en $us convertidos a <a class="link" href="#/tipo-cambio">Bs ${nf2.format(tc())} (${esc(tcDescripcion())})</a>.</p>
   `;
 }
 ROUTES.clientes.after = () => {
@@ -1273,25 +1408,39 @@ function viewSettings() {
       ${field({ label: 'Meta de colocación (Bs)', name: 'metaMensual', type: 'money', value: st.metaMensual || '', hint: 'Suma de créditos desembolsados en el mes' })}
       ${field({ label: 'Meta de clientes nuevos', name: 'metaClientes', type: 'number', value: st.metaClientes || '', attrs: 'inputmode="numeric" min="0"' })}
     </div>
+    <div class="section-title">Tipo de cambio del dólar</div>
+    <div class="card">
+      ${field({ label: 'Origen', name: 'tcModo', type: 'select', value: st.tcModo, options: [{ v: 'auto', l: 'Automático: oficial del BCB (se actualiza a diario)' }, { v: 'manual', l: 'Manual: valor fijo' }] })}
+      <div id="tcAutoWrap" class="${st.tcModo === 'manual' ? 'hidden' : ''}">
+        ${field({ label: 'Valor a usar', name: 'tcTipo', type: 'select', value: st.tcTipo, options: Object.entries(TC_TIPOS).map(([v, l]) => ({ v, l })), hint: 'Se usa para convertir los créditos en $us a Bs: ranking, clases A/B/C, cartera total y metas.' })}
+      </div>
+      <div id="tcManualWrap" class="${st.tcModo === 'manual' ? '' : 'hidden'}">
+        ${field({ label: 'Tipo de cambio manual (Bs por $us)', name: 'tc', type: 'money', value: st.tc })}
+      </div>
+      <a class="link" href="#/tipo-cambio">Ver cotización e historial →</a>
+    </div>
     <div class="section-title">Parámetros</div>
     <div class="card">
-      <div class="fields-2">
-        ${field({ label: 'Tipo de cambio (Bs/$us)', name: 'tc', type: 'money', value: st.tc })}
-        ${field({ label: '% endeudamiento máx.', name: 'endeudamiento', type: 'money', value: st.endeudamiento })}
-      </div>
+      ${field({ label: '% endeudamiento máximo (calculadora)', name: 'endeudamiento', type: 'money', value: st.endeudamiento })}
       ${field({ label: 'Tema', name: 'theme', type: 'select', value: st.theme, options: [{ v: 'auto', l: 'Automático' }, { v: 'light', l: 'Claro' }, { v: 'dark', l: 'Oscuro' }] })}
     </div>
     <button class="btn primary block" type="submit">Guardar ajustes</button>
   </form>`;
 }
 ROUTES.ajustes.after = () => {
-  $('#fSettings').addEventListener('submit', ev => {
+  const f = $('#fSettings');
+  f.tcModo.addEventListener('change', () => {
+    $('#tcAutoWrap').classList.toggle('hidden', f.tcModo.value === 'manual');
+    $('#tcManualWrap').classList.toggle('hidden', f.tcModo.value !== 'manual');
+  });
+  f.addEventListener('submit', ev => {
     ev.preventDefault();
     const d = formData(ev.target);
     Object.assign(S().settings, {
       ejecutivo: d.ejecutivo.trim(), agencia: d.agencia.trim(),
       metaMensual: num(d.metaMensual), metaClientes: parseInt(d.metaClientes, 10) || 0,
-      tc: num(d.tc) || 6.96, endeudamiento: num(d.endeudamiento) || 40, theme: d.theme
+      tcModo: d.tcModo === 'manual' && num(d.tc) ? 'manual' : 'auto', tcTipo: d.tcTipo || 'tco', tc: num(d.tc) || '',
+      endeudamiento: num(d.endeudamiento) || 40, theme: d.theme
     });
     Store.save(); applyTheme(); toast('Ajustes guardados'); location.hash = '#/';
   });
@@ -1577,6 +1726,7 @@ const ACTIONS = {
   openGuides: () => { UI.hbTab = 'guias'; location.hash = '#/homebase'; },
   openTips: () => { UI.hbTab = 'consejos'; location.hash = '#/homebase'; },
   pinSetup: () => pinSetup(),
+  refreshTC: () => actualizarTC({ avisar: true }),
   exportJSON: () => { download(`mi_cartera_respaldo_${today()}.json`, JSON.stringify({ ...S(), settings: { ...S().settings, pinHash: null } }, null, 2), 'application/json'); toast('Respaldo descargado'); },
   exportCSV: () => { exportCSV(); toast('Archivo CSV descargado'); },
   loadDemo: () => loadDemo(),
@@ -1623,6 +1773,13 @@ $('#quickAdd').addEventListener('click', () => {
 applyTheme();
 route();
 lockIfNeeded();
+actualizarTC();
+// Revisar cada 30 minutos mientras la app está abierta y al volver a ella
+setInterval(actualizarTC, 30 * 60 * 1000);
+document.addEventListener('visibilitychange', () => {
+  const ult = Date.parse(S().settings.tcData?.obtenido || 0);
+  if (!document.hidden && Date.now() - ult > 15 * 60 * 1000) actualizarTC();
+});
 
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   navigator.serviceWorker.register('sw.js').catch(() => {});

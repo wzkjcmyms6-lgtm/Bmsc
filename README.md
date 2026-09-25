@@ -34,6 +34,20 @@ Los colores están inspirados en el Banco Mercantil Santa Cruz (verdes con acent
 - Respaldo: exportar e importar en JSON y exportar la cartera a Excel (CSV).
 - PIN de seguridad, tema claro u oscuro, uso sin conexión e instalación en la pantalla de inicio.
 
+## Dólar oficial (TCO del BCB)
+Desde el 29/06/2026 el Banco Central de Bolivia publica un **Tipo de Cambio Oficial flexible** cada día hábil a las 20:00,
+que rige desde el día hábil siguiente. La app lo usa para convertir a Bs los créditos en dólares, así que el ranking,
+las clases A/B/C, la cartera total y las metas siempre se calculan con el dólar del día.
+
+- `scripts/tipo-cambio.mjs` descarga el CSV oficial del BCB y genera `data/tipo-cambio.json`
+  (TCO, venta referencial = TCO + Bs 0,10, y TCO del Banco Mercantil Santa Cruz).
+- `.github/workflows/tipo-cambio.yml` lo ejecuta cada 15 minutos entre 19:30 y 23:45 (hora de Bolivia), más dos revisiones de respaldo.
+- La app revisa la cotización al abrirse y cada 30 minutos. En **Ajustes** se elige el valor que se usa (TCO, venta o TCO BMSC)
+  o un tipo de cambio manual.
+
+> GitHub solo ejecuta las tareas programadas desde la **rama principal** del repositorio: en Settings → General → Default branch
+> hay que elegir `Bmsc`. En Settings → Actions → General → Workflow permissions debe estar "Read and write permissions".
+
 ## Privacidad
 Los datos se guardan **solo en el dispositivo** (almacenamiento del navegador); no se envían a ningún servidor.
 Por eso conviene descargar un respaldo con frecuencia. Los requisitos de las guías son referenciales:
@@ -55,6 +69,8 @@ css/styles.css        Estilos (paleta verde / dorado, modo oscuro)
 js/data.js            Catálogos: tipos de crédito, etapas, guías y requisitos
 js/store.js           Almacenamiento local
 js/app.js             Vistas y lógica
+data/tipo-cambio.json Tipo de cambio oficial (se actualiza solo)
+scripts/              Descarga del TCO del BCB
 sw.js                 Uso sin conexión
 manifest.webmanifest  Instalación como app
 ```
