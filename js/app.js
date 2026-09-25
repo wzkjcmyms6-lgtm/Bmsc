@@ -1262,6 +1262,7 @@ function eventForm(e = {}, preset = {}) {
 const NUBE_TEXTO = {
   'sin-configurar': ['⚪', 'Sin configurar', 'Los datos se guardan solo en este dispositivo. Agrega la configuración de Firebase en js/firebase-config.js.'],
   'conectando': ['🟡', 'Conectando…', 'Estableciendo conexión con Firestore.'],
+  'sin-sesion': ['🟡', 'Sesión cerrada', 'Ingresa con tu usuario y clave para ver y guardar datos.'],
   'conectado': ['🟢', 'Sincronizado', 'Los cambios se guardan en Firestore y aparecen en todos tus dispositivos.'],
   'sin-conexion': ['⚪', 'Sin conexión', 'Puedes seguir trabajando: los cambios se enviarán al volver internet.'],
   'error': ['🔴', 'Error de conexión', '']
@@ -1272,12 +1273,13 @@ function nubeCard() {
   return `<div class="card">
     <div class="row"><div class="icon-dot">☁️</div>
       <div class="grow"><div style="font-weight:700">${ic} Firestore · ${esc(t)}</div>
-      <div class="small muted">${N.proyecto ? 'Proyecto ' + esc(N.proyecto) + ' · ' : ''}${esc(N.estado === 'error' ? N.error : d)}</div></div>
+      <div class="small muted">${N.usuario ? 'Usuario ' + esc(N.usuario) + ' · ' : ''}${N.proyecto ? 'Proyecto ' + esc(N.proyecto) + ' · ' : ''}${esc(N.estado === 'error' ? N.error : d)}</div></div>
     </div>
     ${N.estado !== 'sin-configurar' ? `<div class="btn-row" style="margin-top:12px">
       <a class="btn sm" href="#/historial">${ICONS.clock} Historial de cambios</a>
       <button class="btn sm" data-act="syncNube">↻ Enviar todo a la nube</button>
     </div>` : ''}
+    ${N.usuario ? `<button class="btn sm danger block" style="margin-top:8px" data-act="logout">Cerrar sesión</button>` : ''}
   </div>`;
 }
 
@@ -1791,6 +1793,10 @@ const ACTIONS = {
   openTips: () => { UI.hbTab = 'consejos'; location.hash = '#/homebase'; },
   pinSetup: () => pinSetup(),
   refreshTC: () => actualizarTC({ avisar: true }),
+  logout: async () => {
+    if (!confirm('¿Cerrar sesión? Los datos quedan guardados en la nube y se borran de este dispositivo.')) return;
+    await Nube.cerrarSesion(); toast('Sesión cerrada');
+  },
   syncNube: async () => {
     try { await Nube.sincronizarTodo(); toast('Datos enviados a la nube'); } catch (e) { toast('No se pudo sincronizar: ' + e.message); }
   },

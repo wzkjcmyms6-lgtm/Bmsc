@@ -8,14 +8,17 @@ const SDK = 'https://www.gstatic.com/firebasejs/10.12.2';
 const COLS = { clients: 'clientes', cases: 'tramites', agenda: 'agenda' };
 const ETIQUETA = { clients: 'Cliente', cases: 'Trámite', agenda: 'Actividad' };
 
-let fs = null, db = null;
+let fs = null, db = null, authMod = null, auth = null, listo = false;
+let desuscribir = [];
 const pendientes = [];
 const Nube = {
-  estado: 'sin-configurar', // sin-configurar | conectando | conectado | sin-conexion | error
+  estado: 'sin-configurar', // sin-configurar | conectando | sin-sesion | conectado | sin-conexion | error
   error: '',
   proyecto: '',
+  usuario: '',
   historial: async () => [],
-  sincronizarTodo: async () => {}
+  sincronizarTodo: async () => {},
+  cerrarSesion: async () => {}
 };
 window.Nube = Nube;
 
@@ -59,6 +62,7 @@ async function registrarHistorial(col, accion, d) {
     docId: d?.id || '',
     resumen: resumen(col, d),
     ejecutivo: Store.get().settings.ejecutivo || '',
+    usuario: Nube.usuario,
     dispositivo: idDispositivo,
     datos: accion === 'eliminar' || !d ? null : limpio(d)
   });
@@ -129,8 +133,10 @@ function redibujar() {
 }
 
 function escuchar() {
+  desuscribir.forEach(f => f());
+  desuscribir = [];
   for (const [key, nombre] of Object.entries(COLS)) {
-    fs.onSnapshot(fs.collection(db, nombre), { includeMetadataChanges: true }, snap => {
+    desuscribir.push(fs.onSnapshot(fs.collection(db, nombre), { includeMetadataChanges: true }, snap => {
       // Solo datos confirmados por el servidor (evita borrar la copia local con una caché vacía)
       if (snap.metadata.fromCache || snap.metadata.hasPendingWrites) {
         if (snap.metadata.fromCache && Nube.estado === 'conectado') setEstado('sin-conexion');
@@ -139,8 +145,68 @@ function escuchar() {
       if (Nube.estado !== 'conectado') setEstado('conectado');
       const docs = snap.docs.map(d => d.data()).sort((a, b) => (a.creado || '').localeCompare(b.creado || ''));
       if (Store.applyRemote(key, docs)) redibujar();
-    }, err => setEstado('error', err.message));
+    }, err => setEstado('error', err.code === 'permission-denied' ? 'Sin permiso: revisa las reglas de Firestore' : err.message)));
   }
+}
+
+/* ---------- Inicio de sesión ---------- */
+const $id = id => document.getElementById(id);
+const correoDe = usuario => usuario.includes('@') ? usuario.trim() : `${usuario.trim()}@${window.LOGIN_DOMINIO || 'mi-cartera.app'}`;
+const ERRORES = {
+  'auth/invalid-credential': 'Usuario o clave incorrectos',
+  'auth/invalid-login-credentials': 'Usuario o clave incorrectos',
+  'auth/wrong-password': 'Usuario o clave incorrectos',
+  'auth/user-not-found': 'Usuario o clave incorrectos',
+  'auth/invalid-email': 'Usuario no válido',
+  'auth/too-many-requests': 'Demasiados intentos. Espera unos minutos.',
+  'auth/network-request-failed': 'Sin conexión a internet',
+  'auth/unauthorized-domain': 'Este sitio no está autorizado en Firebase (Dominios autorizados)'
+};
+
+function mostrarLogin(visible) {
+  $id('login').classList.toggle('hidden', !visible);
+  if (visible) setTimeout(() => $id('loginUser').focus(), 100);
+}
+
+$id('loginForm').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const err = $id('loginErr'), btn = $id('loginBtn');
+  err.textContent = '';
+  if (!auth) { err.textContent = 'Conectando… intenta en unos segundos'; return; }
+  btn.disabled = true; btn.textContent = 'Ingresando…';
+  try {
+    await authMod.signInWithEmailAndPassword(auth, correoDe($id('loginUser').value), $id('loginPass').value);
+    $id('loginPass').value = '';
+  } catch (e) {
+    err.textContent = ERRORES[e.code] || e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Ingresar';
+  }
+});
+
+async function alIniciarSesion(user) {
+  Nube.usuario = (user.email || '').split('@')[0];
+  mostrarLogin(false);
+  setEstado('conectando');
+  try {
+    await fusionInicial();
+    escuchar();
+    listo = true;
+    while (pendientes.length) await escribir(pendientes.shift());
+  } catch (e) {
+    console.error('Firestore', e);
+    setEstado(navigator.onLine ? 'error' : 'sin-conexion', e.code === 'permission-denied' ? 'Sin permiso: revisa las reglas de Firestore' : e.message);
+  }
+  if (typeof window.render === 'function') window.render();
+}
+
+function alCerrarSesion() {
+  listo = false;
+  desuscribir.forEach(f => f());
+  desuscribir = [];
+  Nube.usuario = '';
+  setEstado('sin-sesion');
+  mostrarLogin(true);
 }
 
 async function iniciar() {
@@ -149,22 +215,24 @@ async function iniciar() {
   Nube.proyecto = cfg.projectId;
   setEstado('conectando');
   try {
-    const [appMod, fsMod] = await Promise.all([import(`${SDK}/firebase-app.js`), import(`${SDK}/firebase-firestore.js`)]);
-    fs = fsMod;
+    const [appMod, fsMod, aMod] = await Promise.all([
+      import(`${SDK}/firebase-app.js`), import(`${SDK}/firebase-firestore.js`), import(`${SDK}/firebase-auth.js`)
+    ]);
+    fs = fsMod; authMod = aMod;
     const app = appMod.initializeApp(cfg);
     try {
       db = fs.initializeFirestore(app, { localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() }) });
     } catch {
       db = fs.getFirestore(app);
     }
-    await fusionInicial();
-    escuchar();
-    // Enviar cambios hechos mientras se conectaba
-    while (pendientes.length) await escribir(pendientes.shift());
+    auth = authMod.getAuth(app); // la sesión queda guardada en el dispositivo
   } catch (e) {
-    console.error('Firestore', e);
+    // Sin internet la primera vez: se trabaja con la copia local
+    console.error('Firebase', e);
     return setEstado(navigator.onLine ? 'error' : 'sin-conexion', e.message);
   }
+
+  authMod.onAuthStateChanged(auth, user => (user ? alIniciarSesion(user) : alCerrarSesion()));
 
   Nube.historial = async ({ docId = null, max = 100 } = {}) => {
     const col = fs.collection(db, 'historial');
@@ -176,15 +244,23 @@ async function iniciar() {
       .sort((a, b) => (b.fechaLocal || '').localeCompare(a.fechaLocal || ''));
   };
   Nube.sincronizarTodo = () => subirTodo({ reemplazar: false, accion: 'sincronizar' });
+  Nube.cerrarSesion = async () => {
+    await authMod.signOut(auth);
+    // No dejar datos de clientes en el dispositivo después de salir
+    Store.clearLocal();
+    const st = Store.get(); st.settings.nubeFusionada = null; Store.save();
+    location.hash = '#/';
+    if (typeof window.render === 'function') window.render();
+  };
 }
 
 Store.subscribe(ev => {
   if (Nube.estado === 'sin-configurar') return;
-  if (!db) { pendientes.push(ev); return; }
+  if (!listo) { pendientes.push(ev); return; }
   escribir(ev).catch(e => { console.error('Firestore', e); setEstado('error', e.message); });
 });
 
-window.addEventListener('online', () => { if (Nube.estado === 'sin-conexion' && db) setEstado('conectando'); });
-window.addEventListener('offline', () => { if (db) setEstado('sin-conexion'); });
+window.addEventListener('online', () => { if (Nube.estado === 'sin-conexion' && listo) setEstado('conectando'); });
+window.addEventListener('offline', () => { if (listo) setEstado('sin-conexion'); });
 
 iniciar();

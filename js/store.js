@@ -87,6 +87,13 @@ const Store = (() => {
       save();
       emit(null, 'bulk', null, 'restaurar');
     },
+    /* Al cerrar sesión: borra la copia local SIN tocar la nube */
+    clearLocal() {
+      const keep = state.settings;
+      state = empty();
+      Object.assign(state.settings, { theme: keep.theme, tcData: keep.tcData, tcModo: keep.tcModo, tcTipo: keep.tcTipo, tc: keep.tc });
+      save();
+    },
     reset() { const pin = state.settings.pinHash; state = empty(); state.settings.pinHash = pin; save(); emit(null, 'bulk', null, 'borrar'); },
 
     /* ---- Clientes ---- */

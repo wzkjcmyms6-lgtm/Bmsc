@@ -15,6 +15,25 @@
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
+  <!-- Inicio de sesión (Firebase Authentication) -->
+  <div id="login" class="lock login hidden" aria-live="polite">
+    <form id="loginForm" class="lock-box" autocomplete="on">
+      <div class="brand-mark big">MC</div>
+      <h1>Mi Cartera</h1>
+      <p class="muted">Ejecutivo de cuenta · BMSC</p>
+      <div class="field" style="text-align:left">
+        <label for="loginUser">Usuario</label>
+        <input id="loginUser" name="username" inputmode="numeric" autocomplete="username" required>
+      </div>
+      <div class="field" style="text-align:left">
+        <label for="loginPass">Clave</label>
+        <input id="loginPass" name="password" type="password" inputmode="numeric" autocomplete="current-password" required>
+      </div>
+      <button id="loginBtn" class="btn primary block" type="submit">Ingresar</button>
+      <p id="loginErr" class="error-text"></p>
+    </form>
+  </div>
+
   <!-- Bloqueo por PIN -->
   <div id="lock" class="lock hidden" aria-live="polite">
     <div class="lock-box">

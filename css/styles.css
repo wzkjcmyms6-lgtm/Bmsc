@@ -407,3 +407,6 @@ table.tbl th { color: var(--muted); font-weight: 650; font-size: 12px; position:
 .cloud-dot.conectando { background: var(--gold); }
 .cloud-dot.sin-conexion { background: #9aa; }
 .cloud-dot.error { background: var(--red); }
+.cloud-dot.sin-sesion { background: var(--gold); }
+.login { z-index: 110; }
+.login .field input { text-align: left; font-size: 17px; letter-spacing: normal; margin: 0; }

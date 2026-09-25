@@ -71,9 +71,14 @@ En la ficha de cada cliente está su historial de cambios.
 
 Sin configuración, la app funciona igual, pero solo con los datos guardados en el dispositivo.
 
+**Inicio de sesión:** la app pide usuario y clave (Firebase Authentication, correo/contraseña).
+El usuario `17751` entra internamente como `17751@mi-cartera-bmsc.app` (dominio definido en `js/firebase-config.js`).
+Para agregar un usuario: Firebase → Authentication → Usuarios → Agregar usuario (`<usuario>@mi-cartera-bmsc.app`)
+y sumar ese correo a la lista de `firestore.rules`. Al cerrar sesión se borra la copia local del dispositivo.
+
 ## Privacidad
-Versión de prueba / demostración: las reglas de `firestore.rules` permiten leer y escribir a cualquiera que tenga el enlace.
-Antes de usar datos reales de clientes hay que agregar inicio de sesión (Firebase Auth) y restringir las reglas.
+Solo los usuarios incluidos en `firestore.rules` pueden leer o escribir en Firestore.
+El código del sitio es público (GitHub Pages), pero los datos no se pueden ver sin iniciar sesión.
 Los requisitos de las guías son referenciales: valídalos siempre con la normativa interna vigente y con ASFI.
 
 ## Cómo usarla

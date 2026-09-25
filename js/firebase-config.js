@@ -11,6 +11,9 @@ window.FIREBASE_CONFIG = {
   appId: "1:498553278143:web:89403172499666ce1b400a",
   measurementId: "G-R2G3YH9B93"
 };
+/* Dominio interno para el inicio de sesión: el usuario "17751" entra como 17751@mi-cartera-bmsc.app
+   (así se crea en Firebase → Authentication → Usuarios). */
+window.LOGIN_DOMINIO = 'mi-cartera-bmsc.app';
 /* Ejemplo:
 window.FIREBASE_CONFIG = {
   apiKey: "AIza...",
