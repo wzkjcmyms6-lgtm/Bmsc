@@ -351,9 +351,9 @@ const ROUTES = {
   'cliente': { title: 'Cliente', nav: 'clientes', render: viewClient, back: '#/clientes' },
   'homebase': { title: 'Home Base', nav: 'homebase', render: viewHomeBase },
   'caso': { title: 'Trámite', nav: 'homebase', render: viewCase, back: '#/homebase' },
-  'agenda': { title: 'Agenda', nav: 'agenda', render: viewAgenda },
+  'agenda': { title: 'Agenda', nav: 'mas', render: viewAgenda, back: '#/mas' },
   'mas': { title: 'Más', nav: 'mas', render: viewMore },
-  'calculadora': { title: 'Calculadora', nav: 'mas', render: () => '', back: '#/mas' },
+  'calculadora': { title: 'Calculadora de créditos', nav: 'calculadora', render: () => '' },
   'parametros': { title: 'Parámetros de productos', nav: 'mas', render: () => '', back: '#/mas' },
   'ajustes': { title: 'Ajustes', nav: 'mas', render: viewSettings, back: '#/mas' },
   'respaldo': { title: 'Respaldo de datos', nav: 'mas', render: viewBackup, back: '#/mas' },
@@ -1331,7 +1331,7 @@ function viewMore() {
   return `
   <div class="section-title">Herramientas</div>
   <div class="card tight">
-    ${item('#/calculadora', 'calc', 'Calculadora de créditos', 'Simulador, capacidad de pago, tarjeta, prepago y conversor')}
+    ${item('#/agenda', 'cal', 'Agenda', 'Llamadas, visitas, cobranza y cuotas próximas')}
     ${item('', 'book', 'Guías de crédito', 'Requisitos y consejos por tipo de crédito', 'openGuides')}
     ${item('', 'bulb', 'Consejos para el ejecutivo', 'Buenas prácticas de gestión de cartera', 'openTips')}
   </div>

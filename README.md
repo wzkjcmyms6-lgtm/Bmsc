@@ -20,9 +20,9 @@ Los colores están inspirados en el Banco Mercantil Santa Cruz (verdes con acent
 - Botón para pedir por WhatsApp los documentos que faltan, con la lista ya armada.
 - Tareas con fecha límite (aparecen en la Agenda), bitácora automática de cada cambio y la sección "Qué hacer en esta etapa".
 - Al desembolsar, el crédito se registra automáticamente en la cartera del cliente. Si era prospecto, se le ofrece registrarlo como cliente.
-- **Guías** por tipo de crédito (consumo, vivienda, vivienda social, vehicular, PyME, micro, productivo, agropecuario, empresarial, tarjeta, línea, boleta) con requisitos y consejos, que se pueden compartir.
+- **Guías** por tipo de crédito (consumo, tarjeta, vivienda, vivienda de interés social, vehicular y línea de crédito) con requisitos y consejos, que se pueden compartir.
 
-**Agenda y alertas**
+**Agenda y alertas** (en Más; la barra inferior tiene Inicio, Clientes, Home Base, Calculadora y Más)
 - Llamadas, visitas, cobranza, reuniones y comités, agrupados en vencidas, hoy, próximos 7 días y más adelante.
 - Alertas en Inicio: cuotas por vencer, clientes en mora, tareas vencidas, trámites sin movimiento, fechas objetivo vencidas y cumpleaños.
 - Recordatorio de cuota por WhatsApp (cobranza preventiva).
