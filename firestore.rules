@@ -1,11 +1,18 @@
 rules_version = '2';
-// Solo el usuario 17751 (creado en Firebase → Authentication) puede leer y escribir.
-// Para agregar otro ejecutivo: crear su usuario en Authentication y sumar su correo a la lista.
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{coleccion}/{id} {
+    // Cada ejecutivo solo puede leer y escribir su propia cartera: usuarios/{su uid}/...
+    // Los usuarios se crean en Firebase → Authentication (el registro público está desactivado).
+    match /usuarios/{uid}/{coleccion}/{id} {
       allow read, write: if request.auth != null
-        && request.auth.token.email in ['17751@mi-cartera-bmsc.app']
+        && request.auth.uid == uid
+        && coleccion in ['clientes', 'tramites', 'agenda', 'historial'];
+    }
+    // Cartera compartida anterior: solo el usuario 17751 puede leerla y borrarla,
+    // para que la app la mueva a su cartera. Se puede quitar cuando esté vacía.
+    match /{coleccion}/{id} {
+      allow read, delete: if request.auth != null
+        && request.auth.token.email == '17751@mi-cartera-bmsc.app'
         && coleccion in ['clientes', 'tramites', 'agenda', 'historial'];
     }
   }

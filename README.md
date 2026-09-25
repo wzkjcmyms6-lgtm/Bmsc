@@ -62,7 +62,9 @@ las clases A/B/C, la cartera total y las metas siempre se calculan con el dólar
 La app guarda los datos en **Firestore** y mantiene una copia en el celular para funcionar sin internet.
 Lo que se registra en un dispositivo aparece en los demás en segundos.
 
-| Colección   | Contenido |
+Cada ejecutivo tiene **su propia cartera**: los datos se guardan en `usuarios/{uid}/…` y nadie más puede verlos.
+
+| Colección (dentro de `usuarios/{uid}`) | Contenido |
 |-------------|-----------|
 | `clientes`  | Un documento por cliente, con sus créditos |
 | `tramites`  | Trámites del Home Base (requisitos, tareas, bitácora) |
@@ -83,11 +85,16 @@ Sin configuración, la app funciona igual, pero solo con los datos guardados en 
 
 **Inicio de sesión:** la app pide usuario y clave (Firebase Authentication, correo/contraseña).
 El usuario `17751` entra internamente como `17751@mi-cartera-bmsc.app` (dominio definido en `js/firebase-config.js`).
-Para agregar un usuario: Firebase → Authentication → Usuarios → Agregar usuario (`<usuario>@mi-cartera-bmsc.app`)
-y sumar ese correo a la lista de `firestore.rules`. Al cerrar sesión se borra la copia local del dispositivo.
+
+**Agregar un ejecutivo:** Firebase → Authentication → Usuarios → Agregar usuario → `<usuario>@mi-cartera-bmsc.app`
+y una clave. No hay que tocar las reglas: cada usuario nuevo empieza con su cartera vacía.
+Al cerrar sesión se borra la copia local del dispositivo, y si otro usuario ingresa en el mismo celular no ve los datos anteriores.
+
+La cartera compartida anterior (colecciones en la raíz) se mueve sola a la cartera del usuario 17751 la primera vez que ingresa.
 
 ## Privacidad
-Solo los usuarios incluidos en `firestore.rules` pueden leer o escribir en Firestore.
+Cada usuario solo puede leer y escribir su propia cartera (`firestore.rules`). El registro público está desactivado:
+los usuarios los crea el administrador en Firebase.
 El código del sitio es público (GitHub Pages), pero los datos no se pueden ver sin iniciar sesión.
 Los requisitos de las guías son referenciales: valídalos siempre con la normativa interna vigente y con ASFI.
 

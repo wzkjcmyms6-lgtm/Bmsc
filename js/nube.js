@@ -9,6 +9,11 @@ const COLS = { clients: 'clientes', cases: 'tramites', agenda: 'agenda' };
 const ETIQUETA = { clients: 'Cliente', cases: 'Trámite', agenda: 'Actividad' };
 
 let fs = null, db = null, authMod = null, auth = null, listo = false;
+let uidActual = null; // cada ejecutivo tiene su propia cartera: usuarios/{uid}/...
+const col = nombre => fs.collection(db, 'usuarios', uidActual, nombre);
+const ref = (nombre, id) => fs.doc(db, 'usuarios', uidActual, nombre, id);
+// Cartera compartida anterior (colecciones en la raíz): se mueve a la cartera de este usuario
+const USUARIO_LEGADO = '17751@mi-cartera-bmsc.app';
 let desuscribir = [];
 const pendientes = [];
 const Nube = {
@@ -39,28 +44,28 @@ const idDispositivo = (() => {
   } catch { return 'desconocido'; }
 })();
 
-function resumen(col, d) {
+function resumen(clave, d) {
   if (!d) return '';
-  if (col === 'clients') {
+  if (clave === 'clients') {
     const n = (d.credits || []).length;
     return `${d.nombre || ''} · CI ${d.ci || ''} · ${n} crédito${n === 1 ? '' : 's'}`;
   }
-  if (col === 'cases') {
+  if (clave === 'cases') {
     const c = d.clientId && Store.client(d.clientId);
     return `${c ? c.nombre : d.prospecto || 'Prospecto'} · ${d.tipo || ''} · ${d.monto || 0} ${d.moneda || ''} · etapa ${d.etapa || ''}`;
   }
   return `${d.titulo || ''} · ${d.fecha || ''}`;
 }
 
-async function registrarHistorial(col, accion, d) {
-  await fs.addDoc(fs.collection(db, 'historial'), {
+async function registrarHistorial(clave, accion, d) {
+  await fs.addDoc(col('historial'), {
     fecha: fs.serverTimestamp(),
     fechaLocal: new Date().toISOString(),
-    coleccion: COLS[col] || col,
-    tipo: ETIQUETA[col] || col,
+    coleccion: COLS[clave] || clave,
+    tipo: ETIQUETA[clave] || clave,
     accion,
     docId: d?.id || '',
-    resumen: resumen(col, d),
+    resumen: resumen(clave, d),
     ejecutivo: Store.get().settings.ejecutivo || '',
     usuario: Nube.usuario,
     dispositivo: idDispositivo,
@@ -70,9 +75,9 @@ async function registrarHistorial(col, accion, d) {
 
 async function escribir(ev) {
   if (ev.op === 'bulk') return subirTodo({ reemplazar: true, accion: ev.accion });
-  const ref = fs.doc(db, COLS[ev.col], ev.doc.id);
-  if (ev.op === 'delete') await fs.deleteDoc(ref);
-  else await fs.setDoc(ref, limpio(ev.doc));
+  const r = ref(COLS[ev.col], ev.doc.id);
+  if (ev.op === 'delete') await fs.deleteDoc(r);
+  else await fs.setDoc(r, limpio(ev.doc));
   await registrarHistorial(ev.col, ev.accion || ev.op, ev.doc);
 }
 
@@ -82,9 +87,9 @@ async function subirTodo({ reemplazar = false, accion = 'sincronizar' } = {}) {
   let ops = [];
   for (const [key, nombre] of Object.entries(COLS)) {
     const locales = new Set(st[key].map(d => d.id));
-    st[key].forEach(d => ops.push(b => b.set(fs.doc(db, nombre, d.id), limpio(d))));
+    st[key].forEach(d => ops.push(b => b.set(ref(nombre, d.id), limpio(d))));
     if (reemplazar) {
-      const snap = await fs.getDocs(fs.collection(db, nombre));
+      const snap = await fs.getDocs(col(nombre));
       snap.forEach(d => { if (!locales.has(d.id)) ops.push(b => b.delete(d.ref)); });
     }
   }
@@ -94,7 +99,7 @@ async function subirTodo({ reemplazar = false, accion = 'sincronizar' } = {}) {
     ops.splice(0, 450).forEach(op => op(b));
     await b.commit();
   }
-  await fs.addDoc(fs.collection(db, 'historial'), {
+  await fs.addDoc(col('historial'), {
     fecha: fs.serverTimestamp(), fechaLocal: new Date().toISOString(), coleccion: '*', tipo: 'Datos',
     accion, docId: '', resumen: `${st.clients.length} clientes · ${st.cases.length} trámites · ${st.agenda.length} actividades`,
     ejecutivo: st.settings.ejecutivo || '', dispositivo: idDispositivo, datos: null
@@ -104,19 +109,19 @@ async function subirTodo({ reemplazar = false, accion = 'sincronizar' } = {}) {
 /* Primera conexión de este dispositivo: sube lo que solo existe localmente */
 async function fusionInicial() {
   const st = Store.get();
-  if (st.settings.nubeFusionada === Nube.proyecto) return;
+  if (st.settings.nubeFusionada === uidActual) return;
   const ops = [];
   for (const [key, nombre] of Object.entries(COLS)) {
-    const snap = await fs.getDocs(fs.collection(db, nombre));
+    const snap = await fs.getDocs(col(nombre));
     const enNube = new Set(snap.docs.map(d => d.id));
-    st[key].filter(d => !enNube.has(d.id)).forEach(d => ops.push(b => b.set(fs.doc(db, nombre, d.id), limpio(d))));
+    st[key].filter(d => !enNube.has(d.id)).forEach(d => ops.push(b => b.set(ref(nombre, d.id), limpio(d))));
   }
   while (ops.length) {
     const b = fs.writeBatch(db);
     ops.splice(0, 450).forEach(op => op(b));
     await b.commit();
   }
-  st.settings.nubeFusionada = Nube.proyecto;
+  st.settings.nubeFusionada = uidActual;
   Store.save();
 }
 
@@ -136,7 +141,7 @@ function escuchar() {
   desuscribir.forEach(f => f());
   desuscribir = [];
   for (const [key, nombre] of Object.entries(COLS)) {
-    desuscribir.push(fs.onSnapshot(fs.collection(db, nombre), { includeMetadataChanges: true }, snap => {
+    desuscribir.push(fs.onSnapshot(col(nombre), { includeMetadataChanges: true }, snap => {
       // Solo datos confirmados por el servidor (evita borrar la copia local con una caché vacía)
       if (snap.metadata.fromCache || snap.metadata.hasPendingWrites) {
         if (snap.metadata.fromCache && Nube.estado === 'conectado') setEstado('sin-conexion');
@@ -184,11 +189,37 @@ $id('loginForm').addEventListener('submit', async ev => {
   }
 });
 
+/* Mueve la cartera compartida anterior (raíz) a usuarios/{uid} del usuario original */
+async function migrarLegado(user) {
+  if ((user.email || '').toLowerCase() !== USUARIO_LEGADO) return;
+  const ops = [], borrar = [];
+  for (const nombre of [...Object.values(COLS), 'historial']) {
+    let snap;
+    try { snap = await fs.getDocs(fs.collection(db, nombre)); } catch { return; } // sin permiso: ya migrado
+    snap.forEach(d => { ops.push(b => b.set(ref(nombre, d.id), d.data())); borrar.push(d.ref); });
+  }
+  if (!ops.length) return;
+  while (ops.length) { const b = fs.writeBatch(db); ops.splice(0, 450).forEach(op => op(b)); await b.commit(); }
+  while (borrar.length) { const b = fs.writeBatch(db); borrar.splice(0, 450).forEach(r => b.delete(r)); await b.commit(); }
+  console.log('Cartera anterior movida a la cartera del usuario');
+}
+
 async function alIniciarSesion(user) {
   Nube.usuario = (user.email || '').split('@')[0];
+  uidActual = user.uid;
+  // La copia local pertenece a quien inició sesión antes en este dispositivo: no mezclar carteras
+  const st = Store.get();
+  const dueño = st.settings.nubeUid;
+  const tieneDatos = st.clients.length || st.cases.length || st.agenda.length;
+  if (tieneDatos && ((dueño && dueño !== user.uid) || (!dueño && (user.email || '').toLowerCase() !== USUARIO_LEGADO))) {
+    Store.clearLocal();
+  }
+  Store.get().settings.nubeUid = user.uid;
+  Store.save();
   mostrarLogin(false);
   setEstado('conectando');
   try {
+    await migrarLegado(user);
     await fusionInicial();
     escuchar();
     listo = true;
@@ -202,6 +233,7 @@ async function alIniciarSesion(user) {
 
 function alCerrarSesion() {
   listo = false;
+  uidActual = null;
   desuscribir.forEach(f => f());
   desuscribir = [];
   Nube.usuario = '';
@@ -235,10 +267,10 @@ async function iniciar() {
   authMod.onAuthStateChanged(auth, user => (user ? alIniciarSesion(user) : alCerrarSesion()));
 
   Nube.historial = async ({ docId = null, max = 100 } = {}) => {
-    const col = fs.collection(db, 'historial');
+    const h = col('historial');
     const q = docId
-      ? fs.query(col, fs.where('docId', '==', docId), fs.limit(max))
-      : fs.query(col, fs.orderBy('fecha', 'desc'), fs.limit(max));
+      ? fs.query(h, fs.where('docId', '==', docId), fs.limit(max))
+      : fs.query(h, fs.orderBy('fecha', 'desc'), fs.limit(max));
     const snap = await fs.getDocs(q);
     return snap.docs.map(d => ({ id: d.id, ...d.data() }))
       .sort((a, b) => (b.fechaLocal || '').localeCompare(a.fechaLocal || ''));
