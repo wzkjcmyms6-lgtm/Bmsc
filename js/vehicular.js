@@ -54,7 +54,7 @@ function vehState() {
     desgT: '', desgC: '', dimaT: '', dimaC: '',
     tasaFija: 9, margenVar: 3, plazo: 60, periodoFijo: 24,
     estado: 'nuevo', motor: 'gasolina', valorUsd: 15000, tcVeh: '', msc: 'no',
-    tipoT: 'sueldo', montoT: '', otrosT: '', tipoC: 'sueldo', montoC: '', otrosC: '', vivienda: 'no', aguinaldo: 'no', ingC: 'no', deudas: []
+    tipoT: 'sueldo', montoT: '', otrosT: '', tipoC: 'sueldo', montoC: '', otrosC: '', vivienda: 'no', aguinaldo: 'no', ingC: 'no', deudas: [], compra: ''
   };
   const V = C.veh;
   if (V.motor !== 'hibrido') V.motor = 'gasolina';
@@ -209,6 +209,18 @@ function vehForm() {
       <div class="small muted" style="margin-top:10px">TC y N: hasta ${VEH.limite.consumo}% del ingreso computable (líquido) · con H0–H2 el total hasta ${VEH.limite.vivienda}% · con H3–H4 hasta ${VEH.limite.social}% (incluyen el ${VEH.limite.consumo}%).</div>
       <div id="capBox"></div>
     `)}
+
+    ${seccion(7, 'Financiamiento', `
+      <div class="fin-linea">
+        <div><span>Compra de vehículo</span><div class="small muted" id="finPct">Monto que financia el banco según la campaña</div></div>
+        <div class="fin-input"><span>Bs</span><input name="compra" type="text" inputmode="decimal" placeholder="0,00" value="${esc(V.compra || '')}"></div>
+      </div>
+      <div class="fin-linea">
+        <div><span>Seguro vehicular BMSC</span><div class="small muted" id="finSegInfo">Se toma de la sección 4</div></div>
+        <b class="num" id="finSeg">—</b>
+      </div>
+      <div class="fin-total"><span>Monto a financiar</span><b class="num" id="finTotal">—</b></div>
+    `)}
   </form>
   <div id="vehOut"></div>`;
 }
@@ -334,10 +346,16 @@ function vehCalc() {
   const valor = valorUsd * tcVeh;
   const pctMSC = VEH.msc[V.motor] || VEH.msc.gasolina;
   const primaMSC = V.msc === 'si' ? valor * pctMSC / 100 : 0;
-  const monto = valor + primaMSC;
+  // Monto a financiar (sección 7): compra de vehículo (lo define el ejecutivo según campaña) + seguro BMSC
+  const compra = num(V.compra);
+  const monto = compra > 0 ? compra + primaMSC : 0;
+  const fs = $('#finSeg'); if (fs) fs.textContent = primaMSC ? `Bs ${nf2.format(primaMSC)}` : 'No';
+  const fsi = $('#finSegInfo'); if (fsi) fsi.textContent = primaMSC ? `${V.motor === 'hibrido' ? 'Eléctrico / híbrido' : 'A gasolina'} ${nf2.format(pctMSC)}% del valor del vehículo (sección 4)` : 'No se eligió seguro automotor en la sección 4';
+  const ft = $('#finTotal'); if (ft) ft.textContent = monto ? `Bs ${nf2.format(monto)}` : '—';
+  const fp = $('#finPct'); if (fp) fp.textContent = compra && valor ? `${nf2.format(compra / valor * 100)}% del valor del vehículo (Bs ${nf2.format(valor)})` : 'Monto que financia el banco según la campaña';
   const vb = $('#valorBs'); if (vb) vb.textContent = valor ? `Bs ${nf2.format(valor)}` : '—';
   const mi = $('#mscInfo');
-  if (mi) mi.textContent = `${V.motor === 'hibrido' ? 'Eléctrico / híbrido' : 'A gasolina'}: ${nf2.format(pctMSC)}% del valor${primaMSC ? ` = Bs ${nf2.format(primaMSC)}` : ''} · se suma al monto a financiar`;
+  if (mi) mi.textContent = `${V.motor === 'hibrido' ? 'Eléctrico / híbrido' : 'A gasolina'}: ${nf2.format(pctMSC)}% del valor${primaMSC ? ` = Bs ${nf2.format(primaMSC)}` : ''} · se suma al financiamiento (sección 7)`;
   // Plazo máximo: el crédito debe terminar antes de que el mayor de los dos pase los 76 años
   const fechas = [V.fnac, conCodeudor ? V.cFnac : null].map(parseDate).filter(Boolean);
   const mayor = fechas.length ? new Date(Math.min(...fechas)) : null;
@@ -391,7 +409,7 @@ function vehCalc() {
         <dt>Plazo</dt><dd>${plazo} meses (${plazo / 12} ${plazo === 12 ? 'año' : 'años'})</dd>
       </dl>
     </div>
-    <div class="card empty small">💡 Ingresa el valor del vehículo para calcular la cuota.</div>`;
+    <div class="card empty small">💡 Ingresa el monto de compra de vehículo (sección 7) para calcular la cuota.</div>`;
     pintaCapacidad(V, 0);
     vehCalc.ultimo = null;
     return;
@@ -433,7 +451,8 @@ function vehCalc() {
     <dl class="kv">
       <dt>Vehículo</dt><dd>${V.estado === 'usado' ? 'Usado' : 'Nuevo'} · ${V.motor === 'hibrido' ? 'eléctrico / híbrido' : 'a gasolina'}</dd>
       <dt>Valor del vehículo</dt><dd class="num">$us ${nf2.format(valorUsd)} × ${nf2.format(tcVeh)} = ${fmt(valor, m)}</dd>
-      ${primaMSC ? `<dt>Seguro automotor MSC (${nf2.format(pctMSC)}%)</dt><dd class="num">+ ${fmt(primaMSC, m)}</dd>` : ''}
+      <dt>Compra de vehículo</dt><dd class="num">${fmt(compra, m)}${valor ? ` (${nf2.format(compra / valor * 100)}%)` : ''}</dd>
+      ${primaMSC ? `<dt>Seguro vehicular BMSC (${nf2.format(pctMSC)}%)</dt><dd class="num">+ ${fmt(primaMSC, m)}</dd>` : ''}
       <dt><b>Monto a financiar</b></dt><dd class="num"><b>${fmt(monto, m)}</b></dd>
       <dt>Plazo</dt><dd>${plazo} meses (${plazo / 12} ${plazo === 12 ? 'año' : 'años'})</dd>
       ${cap && cap.bruto ? `<dt>Capacidad de pago</dt><dd>${cap.cumple ? '✅ Cumple' : '❌ No cumple'} · máx. Bs ${nf2.format(cap.maxNueva)}</dd>` : ''}
@@ -466,7 +485,7 @@ function vehCalc() {
   </details>
   <p class="small muted">Desgravamen y DIMA: tasa anual ÷ 12, aplicada cada mes sobre el saldo capital. Cuota variable estimada con la TRe vigente; puede cambiar cuando el BCB publique una nueva.</p>`;
   $('#vehPlan')?.addEventListener('toggle', e => { V.verPlan = e.target.open; guardarCalc(); });
-  vehCalc.ultimo = { V: { ...V }, monto, c1, cVar, plazo, fijo, tasaVar, desgTxt, dima, primaMSC, aplica, valor, valorUsd, tcVeh };
+  vehCalc.ultimo = { V: { ...V }, monto, c1, cVar, plazo, fijo, tasaVar, desgTxt, dima, primaMSC, aplica, valor, valorUsd, tcVeh, compra };
 }
 
 /* ---------------- Enlace con la app ---------------- */
