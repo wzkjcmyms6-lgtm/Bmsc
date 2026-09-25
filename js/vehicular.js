@@ -82,13 +82,15 @@ const seccion = (n, titulo, cuerpo, extra = '') => `
     ${cuerpo}
   </section>`;
 
+// Extensión del carnet de identidad (departamento de emisión)
+const CI_EXT = [{ v: '', l: '—' }, ...CATALOG.extensiones];
 const TIPOS_INGRESO = [['sueldo', 'Sueldo'], ['jubilacion', 'Jubilación'], ['exterior', 'Del exterior']];
 const ETIQ_MONTO = { sueldo: 'Sueldo bruto (Bs)', jubilacion: 'Renta líquida (Bs)', exterior: 'Ingreso mensual (Bs)' };
-function ingresoPersona(V, p, titulo) {
+function ingresoPersona(V, p, titulo, extra = '') {
   const tipo = V['tipo' + p];
   return `
     <div class="veh-persona">
-      <div class="veh-persona-head"><b>${titulo}</b></div>
+      <div class="veh-persona-head"><b>${titulo}</b>${extra}</div>
       <div style="margin-bottom:10px">${opciones('tipo' + p, tipo, TIPOS_INGRESO)}</div>
       <div class="fields-2">
         ${field({ label: ETIQ_MONTO[tipo], name: 'monto' + p, type: 'money', value: V['monto' + p] })}
@@ -125,9 +127,10 @@ function vehForm() {
   const persona = (p, titulo) => `
     <div class="veh-persona">
       <div class="veh-persona-head"><b>${titulo}</b><span class="badge gray" id="edad_${p || 't'}">Edad —</span></div>
-      <div class="fields-2">
-        ${field({ label: 'Nombre (opcional)', name: p ? p + 'Nombre' : 'nombre', value: V[p ? p + 'Nombre' : 'nombre'], attrs: 'autocomplete="off"' })}
+      ${field({ label: 'Nombre (opcional)', name: p ? p + 'Nombre' : 'nombre', value: V[p ? p + 'Nombre' : 'nombre'], attrs: 'autocomplete="off"' })}
+      <div class="ci-row">
         ${field({ label: 'Carnet (opcional)', name: p ? p + 'Ci' : 'ci', value: V[p ? p + 'Ci' : 'ci'], attrs: 'inputmode="numeric" autocomplete="off"' })}
+        ${field({ label: 'Extensión', name: p ? p + 'Ext' : 'ext', type: 'select', value: V[p ? p + 'Ext' : 'ext'] || '', options: CI_EXT })}
       </div>
       ${field({ label: 'Fecha de nacimiento', name: p ? p + 'Fnac' : 'fnac', type: 'date', value: V[p ? p + 'Fnac' : 'fnac'], required: true })}
     </div>`;
@@ -178,8 +181,9 @@ function vehForm() {
 
     ${seccion(5, 'Ingresos', `
       ${ingresoPersona(V, 'T', 'Titular')}
-      ${V.codeudor === 'si' ? `<div class="veh-row"><span>¿Sumar ingresos del codeudor?</span>${siNo('ingC', V.ingC)}</div>
-      ${V.ingC === 'si' ? ingresoPersona(V, 'C', 'Codeudor') : ''}` : ''}
+      ${V.codeudor === 'si' && V.ingC === 'si'
+        ? ingresoPersona(V, 'C', 'Codeudor', `<button type="button" class="link-btn" data-act="vehIngC" data-v="no">Quitar</button>`)
+        : `<button type="button" class="btn block veh-add" data-act="vehIngC" data-v="si">+ Añadir ingresos del codeudor (opcional)</button>`}
       <div class="veh-row"><span>¿Tiene crédito de vivienda?</span>${siNo('vivienda', V.vivienda)}</div>
       ${V.vivienda === 'si' ? `<div class="veh-row"><div><span>¿Tomar el aguinaldo?</span><div class="small muted" id="aguiInfo">Un sueldo al año, mensualizado (÷ 12)</div></div>${siNo('aguinaldo', V.aguinaldo)}</div>` : ''}
       <div class="veh-valor-bs"><span class="small muted" id="ingEtiq">Ingreso computable (líquido)</span><b class="num" id="ingTotal">—</b></div>
@@ -520,6 +524,13 @@ ROUTES.calculadora.after = () => {
 
 Object.assign(ACTIONS, {
   vehDeudaAdd: () => { vehState().deudas.push({ cod: 'N', cuota: '' }); guardarCalc(); render(); setTimeout(() => { const i = vehState().deudas.length - 1; $(`#vehForm [name=d_${i}_cuota]`)?.focus(); }, 50); },
+  // Ingresos del codeudor: al añadirlos se activa el codeudor en la sección 1 (su fecha de nacimiento es obligatoria)
+  vehIngC: el => {
+    const V = vehState();
+    V.ingC = el.dataset.v;
+    if (V.ingC === 'si' && V.codeudor !== 'si') { V.codeudor = 'si'; toast('Codeudor activado: completa sus datos en la sección 1'); }
+    guardarCalc(); render();
+  },
   vehDeudaDel: el => { vehState().deudas.splice(+el.dataset.i, 1); guardarCalc(); render(); },
   vehCompartir: () => {
     const u = vehCalc.ultimo; if (!u) return;
