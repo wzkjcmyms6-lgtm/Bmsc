@@ -461,3 +461,4 @@ tr[data-act] td { cursor: pointer; }
 .veh-sep { height: 1px; background: rgba(255,255,255,.25); margin: 12px 0; }
 .hero .veh-cuota .muted { color: rgba(255,255,255,.8); }
 .veh-res-title { font-weight: 700; margin-bottom: 10px; }
+.veh-off .seg-toggle { opacity: .45; pointer-events: none; }

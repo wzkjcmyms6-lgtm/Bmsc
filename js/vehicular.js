@@ -82,7 +82,7 @@ function vehForm() {
     ${seccion(2, 'Seguros', `
       <div class="veh-row"><div><span>Seguro de desgravamen</span><div class="small muted" id="desgInfo">Según la edad de los clientes</div></div>
         <span class="badge" id="desgBadge">—</span></div>
-      <div class="veh-row"><div><span>Seguro DIMA</span><div class="small muted">${V.codeudor === 'si' ? `Titular y codeudor ${nf2.format(VEH.dima.mancomunado)}%` : `Solo titular ${nf2.format(VEH.dima.titular)}%`} sobre saldo capital</div></div>
+      <div class="veh-row" id="dimaRow"><div><span>Seguro DIMA</span><div class="small muted" id="dimaInfo"></div></div>
         ${siNo('dima', V.dima)}</div>
       <div class="veh-row"><div><span>¿Seguro automotor MSC?</span><div class="small muted">Se suma al monto a financiar</div></div>${siNo('msc', V.msc)}</div>
       ${V.msc === 'si' ? `<div class="veh-row"><span>Tipo de vehículo</span>${opciones('motor', V.motor, [['normal', `Normal ${nf2.format(VEH.msc.normal)}%`], ['hibrido', `Híbrido / eléctrico ${nf2.format(VEH.msc.hibrido)}%`]])}</div>` : ''}
@@ -125,14 +125,26 @@ function vehCalc() {
   pintaEdad('edad_t', eT); pintaEdad('edad_c', eC);
 
   // Desgravamen según edad (hasta 70 años y 360 días)
-  const okT = elegible(eT), okC = conCodeudor && elegible(eC);
+  // Regla: si cualquiera de los dos supera 70 años y 360 días, no hay desgravamen para nadie (ni DIMA)
+  const okT = elegible(eT), okC = !conCodeudor || elegible(eC);
+  const fechasCompletas = !!eT && (!conCodeudor || !!eC);
+  const aplica = fechasCompletas && okT && okC;
   let desg = 0, desgTxt = '';
-  if (conCodeudor && okT && okC) { desg = VEH.desgravamen.mancomunado; desgTxt = `Titular y codeudor · ${pct3(desg)}%`; }
-  else if (okT || okC) { desg = VEH.desgravamen.titular; desgTxt = `${okT ? 'Titular' : 'Codeudor'} · ${pct3(desg)}%`; }
-  else desgTxt = 'No aplica';
-  const dima = V.dima === 'si' ? (conCodeudor ? VEH.dima.mancomunado : VEH.dima.titular) : 0;
+  if (aplica) { desg = conCodeudor ? VEH.desgravamen.mancomunado : VEH.desgravamen.titular; desgTxt = `${conCodeudor ? 'Titular y codeudor' : 'Solo titular'} · ${pct3(desg)}%`; }
+  else if (fechasCompletas) desgTxt = 'No aplica (supera la edad máxima)';
+  else desgTxt = 'Falta fecha de nacimiento';
+  // DIMA: solo existe si hay desgravamen, y es a elección
+  const dima = aplica && V.dima === 'si' ? (conCodeudor ? VEH.dima.mancomunado : VEH.dima.titular) : 0;
+  $$('#vehForm input[name=dima]').forEach(r => { r.disabled = !aplica; });
+  const dimaRow = $('#dimaRow');
+  if (dimaRow) {
+    dimaRow.classList.toggle('veh-off', !aplica);
+    $('#dimaInfo').textContent = aplica
+      ? `${conCodeudor ? `Titular y codeudor ${pct3(VEH.dima.mancomunado)}%` : `Solo titular ${pct3(VEH.dima.titular)}%`} sobre saldo capital`
+      : 'Solo disponible si aplica el desgravamen';
+  }
   const badge = $('#desgBadge');
-  if (badge) { badge.textContent = (eT || eC) ? desgTxt : 'Falta fecha de nacimiento'; badge.className = 'badge ' + (desg ? '' : 'red'); }
+  if (badge) { badge.textContent = desgTxt; badge.className = 'badge ' + (desg ? '' : fechasCompletas ? 'red' : 'gray'); }
   const info = $('#desgInfo');
   if (info) info.textContent = `Edad máxima ${VEH.edadMax.anios} años y ${VEH.edadMax.dias} días`;
 
@@ -152,8 +164,8 @@ function vehCalc() {
   const avisos = [];
   if (!V.fnac) avisos.push('Ingresa la fecha de nacimiento del titular (obligatoria).');
   if (conCodeudor && !V.cFnac) avisos.push('Ingresa la fecha de nacimiento del codeudor (obligatoria).');
-  if (eT && !okT) avisos.push(`El titular supera la edad máxima para desgravamen (${edadTxt(eT)}).`);
-  if (eC && !okC) avisos.push(`El codeudor supera la edad máxima para desgravamen (${edadTxt(eC)}).`);
+  if (eT && !okT) avisos.push(`El titular supera la edad máxima (${edadTxt(eT)}): el crédito va sin desgravamen ni DIMA.`);
+  if (conCodeudor && eC && !okC) avisos.push(`El codeudor supera la edad máxima (${edadTxt(eC)}): el crédito va sin desgravamen ni DIMA.`);
   if (num(V.periodoFijo) > plazo) avisos.push(`El periodo de tasa fija no puede superar el plazo (${plazo} meses).`);
   if (!(monto > 0)) { out.innerHTML = '<div class="card empty">Ingresa el valor del vehículo</div>'; return; }
 
@@ -224,7 +236,7 @@ function vehCalc() {
   </details>
   <p class="small muted">Seguros calculados sobre el saldo capital de cada mes. Cuota variable estimada con la TRe vigente; puede cambiar cuando el BCB publique una nueva.</p>`;
   $('#vehPlan')?.addEventListener('toggle', e => { V.verPlan = e.target.open; guardarCalc(); });
-  vehCalc.ultimo = { V: { ...V }, monto, c1, cVar, plazo, fijo, tasaVar, desgTxt, dima, primaMSC };
+  vehCalc.ultimo = { V: { ...V }, monto, c1, cVar, plazo, fijo, tasaVar, desgTxt, dima, primaMSC, aplica };
 }
 
 /* ---------------- Enlace con la app ---------------- */
@@ -256,7 +268,7 @@ ${u.V.nombre ? 'Cliente: ' + u.V.nombre + '\n' : ''}Vehículo ${u.V.producto ===
 Monto a financiar: ${fmt(u.monto, m)}
 Plazo: ${u.plazo} meses
 Cuota mensual: *${fmt(u.c1.total, m)}*${u.cVar ? ` (meses 1-${u.fijo}); desde el mes ${u.fijo + 1}: ${fmt(u.cVar.total, m)} aprox.` : ''}
-Incluye desgravamen${u.dima ? ' y DIMA' : ''}${u.primaMSC ? '; seguro automotor financiado' : ''}.
+${u.aplica ? `Incluye desgravamen${u.dima ? ' y DIMA' : ''}` : 'Sin desgravamen'}${u.primaMSC ? '; seguro automotor financiado' : ''}.
 Sujeto a evaluación y aprobación.
 ${S().settings.ejecutivo || ''} - Banco Mercantil Santa Cruz`;
     if (navigator.share) navigator.share({ text }).catch(() => {});
