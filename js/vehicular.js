@@ -18,7 +18,8 @@ const VEH = {
     { v: 'H0', l: 'H0 · Vivienda', g: 'vivienda' }, { v: 'H1', l: 'H1 · Vivienda', g: 'vivienda' }, { v: 'H2', l: 'H2 · Vivienda', g: 'vivienda' },
     { v: 'H3', l: 'H3 · Vivienda social', g: 'social' }, { v: 'H4', l: 'H4 · Vivienda social', g: 'social' }
   ],
-  limite: { consumo: 25, vivienda: 40, social: 37 },  // vivienda y social incluyen el 25% de consumo
+  limite: { consumo: 25, vivienda: 40, social: 37 },
+  impuestoExterior: 13,                        // % que se descuenta a ingresos del exterior (referencial)  // vivienda y social incluyen el 25% de consumo
   treMN: 3.65, treVigencia: 'septiembre 2026'  // TRe MN publicada por el BCB (respaldo)
 };
 const pct3 = v => new Intl.NumberFormat('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(v);
@@ -46,13 +47,15 @@ function vehState() {
     desgT: '', desgC: '', dimaT: '', dimaC: '',
     tasaFija: 9, margenVar: 3, plazo: 60, periodoFijo: 24,
     estado: 'nuevo', motor: 'gasolina', valorUsd: 15000, tcVeh: '', msc: 'no',
-    brutoT: '', brutoC: '', deudas: []
+    tipoT: 'sueldo', montoT: '', otrosT: '', tipoC: 'sueldo', montoC: '', otrosC: '', deudas: []
   };
   const V = C.veh;
   if (V.motor !== 'hibrido') V.motor = 'gasolina';
   if (V.estado !== 'usado') V.estado = 'nuevo';
   if (V.valorUsd === undefined) V.valorUsd = 15000;
   if (!Array.isArray(V.deudas)) V.deudas = [];
+  if (V.brutoT !== undefined) { V.montoT = V.montoT || V.brutoT; V.montoC = V.montoC || V.brutoC; delete V.brutoT; delete V.brutoC; }
+  V.tipoT = V.tipoT || 'sueldo'; V.tipoC = V.tipoC || 'sueldo';
   return V;
 }
 
@@ -71,6 +74,42 @@ const seccion = (n, titulo, cuerpo, extra = '') => `
     <div class="veh-sec-head"><span class="veh-num">${n}</span><h3>${titulo}</h3>${extra}</div>
     ${cuerpo}
   </section>`;
+
+const TIPOS_INGRESO = [['sueldo', 'Sueldo'], ['jubilacion', 'Jubilación'], ['exterior', 'Del exterior']];
+const ETIQ_MONTO = { sueldo: 'Sueldo bruto (Bs)', jubilacion: 'Renta líquida (Bs)', exterior: 'Ingreso mensual (Bs)' };
+function ingresoPersona(V, p, titulo) {
+  const tipo = V['tipo' + p];
+  return `
+    <div class="veh-persona">
+      <div class="veh-persona-head"><b>${titulo}</b></div>
+      <div style="margin-bottom:10px">${opciones('tipo' + p, tipo, TIPOS_INGRESO)}</div>
+      <div class="fields-2">
+        ${field({ label: ETIQ_MONTO[tipo], name: 'monto' + p, type: 'money', value: V['monto' + p] })}
+        ${field({ label: 'Descuentos / impuestos (opcional)', name: 'otros' + p, type: 'money', value: V['otros' + p], placeholder: '0,00' })}
+      </div>
+      <div class="small muted ing-detalle" id="ingDet${p}"></div>
+    </div>`;
+}
+/* Ingreso de una persona según su tipo:
+   sueldo → se calcula el líquido con los descuentos de ley, pero para capacidad se usa el bruto;
+   jubilación → el monto ingresado ya es líquido; exterior → se descuentan impuestos. */
+function calcIngreso(tipo, monto, otros) {
+  if (tipo === 'jubilacion') return { liquido: Math.max(0, monto - otros), computable: Math.max(0, monto - otros), detalle: monto ? `Líquido: Bs ${nf2.format(Math.max(0, monto - otros))}` : '' };
+  if (tipo === 'exterior') {
+    const imp = monto * VEH.impuestoExterior / 100;
+    const neto = Math.max(0, monto - imp - otros);
+    return { liquido: neto, computable: neto, detalle: monto ? `Impuestos ${nf2.format(VEH.impuestoExterior)}%: − Bs ${nf2.format(imp)}${otros ? ` · otros − Bs ${nf2.format(otros)}` : ''} · Neto: Bs ${nf2.format(neto)}` : '' };
+  }
+  const l = liquidoAsalariado(monto);
+  const liquido = Math.max(0, l.liquido - otros);
+  const computable = Math.max(0, monto - otros);
+  return { liquido, computable, detalle: monto ? `Descuentos de ley: − Bs ${nf2.format(l.laboral + l.ans)} (Gestora ${nf2.format(APORTES.laboral)}%${l.ans ? ' + Aporte Solidario' : ''})${otros ? ` · otros − Bs ${nf2.format(otros)}` : ''} · Líquido: Bs ${nf2.format(liquido)} · Para capacidad (bruto): Bs ${nf2.format(computable)}` : '' };
+}
+function ingresosTotales(V) {
+  const t = calcIngreso(V.tipoT, num(V.montoT), num(V.otrosT));
+  const c = V.codeudor === 'si' ? calcIngreso(V.tipoC, num(V.montoC), num(V.otrosC)) : null;
+  return { t, c, computable: t.computable + (c ? c.computable : 0), liquido: t.liquido + (c ? c.liquido : 0) };
+}
 
 function vehForm() {
   const V = vehState();
@@ -128,11 +167,13 @@ function vehForm() {
       <div class="veh-row"><div><span>¿Seguro automotor MSC?</span><div class="small muted" id="mscInfo"></div></div>${siNo('msc', V.msc)}</div>
     `)}
 
-    ${seccion(5, 'Servicio de deudas mensual', `
-      <div class="fields-2">
-        ${field({ label: 'Sueldo bruto titular (Bs)', name: 'brutoT', type: 'money', value: V.brutoT })}
-        ${V.codeudor === 'si' ? field({ label: 'Sueldo bruto codeudor (Bs)', name: 'brutoC', type: 'money', value: V.brutoC }) : '<div></div>'}
-      </div>
+    ${seccion(5, 'Ingresos', `
+      ${ingresoPersona(V, 'T', 'Titular')}
+      ${V.codeudor === 'si' ? ingresoPersona(V, 'C', 'Codeudor') : ''}
+      <div class="veh-valor-bs"><span class="small muted">Ingreso computable${V.codeudor === 'si' ? ' sumado' : ''}</span><b class="num" id="ingTotal">—</b></div>
+    `)}
+
+    ${seccion(6, 'Servicio de deudas mensual', `
       <div class="deudas-head small muted"><span>Código</span><span>Cuota mensual (Bs)</span><span></span></div>
       <div id="deudas">${V.deudas.map((d, i) => `
         <div class="deuda-row">
@@ -141,7 +182,7 @@ function vehForm() {
           <button type="button" class="icon-btn deuda-del" data-act="vehDeudaDel" data-i="${i}" aria-label="Quitar">${ICONS.x}</button>
         </div>`).join('') || '<div class="small muted" style="padding:6px 0">Sin deudas registradas.</div>'}</div>
       <button type="button" class="btn sm" data-act="vehDeudaAdd" style="margin-top:8px">${ICONS.plus} Agregar deuda</button>
-      <div class="small muted" style="margin-top:10px">TC y N: hasta ${VEH.limite.consumo}% del sueldo bruto · con H0–H2 el total hasta ${VEH.limite.vivienda}% · con H3–H4 hasta ${VEH.limite.social}% (incluyen el ${VEH.limite.consumo}%).</div>
+      <div class="small muted" style="margin-top:10px">TC y N: hasta ${VEH.limite.consumo}% del ingreso computable · con H0–H2 el total hasta ${VEH.limite.vivienda}% · con H3–H4 hasta ${VEH.limite.social}% (incluyen el ${VEH.limite.consumo}%).</div>
       <div id="capBox"></div>
     `)}
   </form>
@@ -150,7 +191,7 @@ function vehForm() {
 
 /* Capacidad de pago según el servicio de deudas */
 function capacidadDeudas(V, cuotaNueva) {
-  const bruto = num(V.brutoT) + (V.codeudor === 'si' ? num(V.brutoC) : 0);
+  const bruto = ingresosTotales(V).computable;
   const grupo = cod => (VEH.codigos.find(c => c.v === cod) || VEH.codigos[1]).g;
   const suma = g => V.deudas.filter(d => grupo(d.cod) === g).reduce((a, d) => a + num(d.cuota), 0);
   const cons = suma('consumo'), viv = suma('vivienda'), soc = suma('social');
@@ -162,16 +203,24 @@ function capacidadDeudas(V, cuotaNueva) {
   const maxNueva = Math.max(0, Math.min(bruto * VEH.limite.consumo / 100 - cons, bruto * limTotal / 100 - (cons + viv + soc)));
   return { bruto, cons, viv, soc, limTotal, consNuevo, total, pc, pt, okCons, okTotal, cumple: okCons && okTotal, maxNueva };
 }
+function pintaIngresos(V) {
+  const ing = ingresosTotales(V);
+  const d = $('#ingDetT'); if (d) d.textContent = ing.t.detalle;
+  const dc = $('#ingDetC'); if (dc && ing.c) dc.textContent = ing.c.detalle;
+  const tot = $('#ingTotal'); if (tot) tot.textContent = ing.computable ? `Bs ${nf2.format(ing.computable)}` : '—';
+  return ing;
+}
 function pintaCapacidad(V, cuotaNueva) {
+  pintaIngresos(V);
   const box = $('#capBox');
   if (!box) return null;
   const k = capacidadDeudas(V, cuotaNueva);
-  if (!k.bruto) { box.innerHTML = '<div class="card empty small" style="margin:12px 0 0">Ingresa el sueldo bruto para evaluar la capacidad de pago.</div>'; return k; }
+  if (!k.bruto) { box.innerHTML = '<div class="card empty small" style="margin:12px 0 0">Ingresa los ingresos (sección 5) para evaluar la capacidad de pago.</div>'; return k; }
   const barra = (pctUsado, limite, ok) => `<div class="bar" style="height:10px;margin-top:4px"><span style="width:${Math.min(100, pctUsado / limite * 100)}%;background:${ok ? 'var(--green-600)' : 'var(--red)'}"></span></div>`;
   box.innerHTML = `
   <div class="cap-box ${cuotaNueva ? (k.cumple ? 'ok' : 'no') : ''}">
     <div class="row between"><b>Capacidad de pago</b>${cuotaNueva ? `<span class="badge ${k.cumple ? '' : 'red'}">${k.cumple ? '✅ Cumple' : '❌ No cumple'}</span>` : ''}</div>
-    <div class="small muted">Sueldo bruto${V.codeudor === 'si' ? ' sumado' : ''}: <b class="num">Bs ${nf2.format(k.bruto)}</b></div>
+    <div class="small muted">Ingreso computable${V.codeudor === 'si' ? ' sumado' : ''}: <b class="num">Bs ${nf2.format(k.bruto)}</b></div>
     <div class="cap-linea">
       <div class="row between small"><span>TC + N${cuotaNueva ? ' + nuevo crédito' : ''}</span><span class="num"><b>${nf2.format(k.pc)}%</b> de ${VEH.limite.consumo}%</span></div>
       ${barra(k.pc, VEH.limite.consumo, k.okCons)}
@@ -374,7 +423,7 @@ ROUTES.calculadora.after = () => {
   const V = vehState();
   const form = $('#vehForm');
   if (!form) return;
-  const rerender = ['codeudor', 'plazo'];
+  const rerender = ['codeudor', 'plazo', 'tipoT', 'tipoC'];
   // (motor, estado y seguro automotor se recalculan sin redibujar)
   const onChange = e => {
     Object.entries(formData(form)).forEach(([k, v]) => {

@@ -488,3 +488,4 @@ tr[data-act] td { cursor: pointer; }
 .cap-box.ok { border-color: var(--green-500); background: var(--green-50); }
 .cap-box.no { border-color: var(--red); background: var(--red-soft); }
 .cap-linea { margin-top: 10px; }
+.ing-detalle { padding-bottom: 10px; margin-top: -4px; }
