@@ -14,6 +14,7 @@ const VEH = {
   treMN: 3.65, treVigencia: 'septiembre 2026'  // TRe MN publicada por el BCB (respaldo)
 };
 const pct3 = v => new Intl.NumberFormat('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(v);
+const mensual = anual => new Intl.NumberFormat('es-BO', { minimumFractionDigits: 3, maximumFractionDigits: 4 }).format(anual / 12);
 const treMN = () => num(S().settings.treManual) || S().settings.tre?.mn || VEH.treMN;
 const treVigencia = () => (num(S().settings.treManual) ? 'manual' : S().settings.tre?.vigencia || VEH.treVigencia);
 
@@ -133,7 +134,7 @@ function vehCalc() {
   const aplica = fechasCompletas && cubiertos.length > 0;
   const ambos = cubiertos.length === 2;
   let desg = 0, desgTxt = '';
-  if (aplica) { desg = ambos ? VEH.desgravamen.mancomunado : VEH.desgravamen.titular; desgTxt = `${ambos ? 'Titular y codeudor' : 'Solo ' + cubiertos[0].toLowerCase()} · ${pct3(desg)}%`; }
+  if (aplica) { desg = ambos ? VEH.desgravamen.mancomunado : VEH.desgravamen.titular; desgTxt = `${ambos ? 'Titular y codeudor' : 'Solo ' + cubiertos[0].toLowerCase()} · ${pct3(desg)}% anual (${mensual(desg)}% mensual)`; }
   else if (fechasCompletas) desgTxt = 'No aplica (supera la edad máxima)';
   else desgTxt = 'Falta fecha de nacimiento';
   // DIMA: solo existe si hay desgravamen, es a elección y cubre a las mismas personas
@@ -143,7 +144,7 @@ function vehCalc() {
   if (dimaRow) {
     dimaRow.classList.toggle('veh-off', !aplica);
     $('#dimaInfo').textContent = aplica
-      ? `${ambos ? `Titular y codeudor ${pct3(VEH.dima.mancomunado)}%` : `Solo ${cubiertos[0].toLowerCase()} ${pct3(VEH.dima.titular)}%`} sobre saldo capital`
+      ? `${ambos ? 'Titular y codeudor' : 'Solo ' + cubiertos[0].toLowerCase()} ${pct3(ambos ? VEH.dima.mancomunado : VEH.dima.titular)}% anual (${mensual(ambos ? VEH.dima.mancomunado : VEH.dima.titular)}% mensual) sobre saldo capital`
       : 'Solo disponible si aplica el desgravamen';
   }
   const badge = $('#desgBadge');
@@ -234,7 +235,7 @@ function vehCalc() {
       <dt>Plazo</dt><dd>${plazo} meses (${plazo / 12} ${plazo === 12 ? 'año' : 'años'})</dd>
       <dt>Producto</dt><dd>${V.producto === 'nuevo' ? 'Vehículo nuevo' : 'Vehículo usado'}</dd>
       <dt>Desgravamen</dt><dd>${esc(desgTxt)}</dd>
-      <dt>DIMA</dt><dd>${dima ? nf2.format(dima) + '%' : 'No'}</dd>
+      <dt>DIMA</dt><dd>${dima ? pct3(dima) + '% anual (' + mensual(dima) + '% mensual)' : 'No'}</dd>
     </dl>
   </div>
 
@@ -260,7 +261,7 @@ function vehCalc() {
       </tbody></table>
     </div>
   </details>
-  <p class="small muted">Seguros calculados sobre el saldo capital de cada mes. Cuota variable estimada con la TRe vigente; puede cambiar cuando el BCB publique una nueva.</p>`;
+  <p class="small muted">Desgravamen y DIMA: tasa anual ÷ 12, aplicada cada mes sobre el saldo capital. Cuota variable estimada con la TRe vigente; puede cambiar cuando el BCB publique una nueva.</p>`;
   $('#vehPlan')?.addEventListener('toggle', e => { V.verPlan = e.target.open; guardarCalc(); });
   vehCalc.ultimo = { V: { ...V }, monto, c1, cVar, plazo, fijo, tasaVar, desgTxt, dima, primaMSC, aplica };
 }
