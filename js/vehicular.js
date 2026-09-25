@@ -35,7 +35,7 @@ function vehState() {
   const C = calcState();
   C.veh = C.veh || {
     nombre: '', ci: '', fnac: '', codeudor: 'no', cNombre: '', cCi: '', cFnac: '',
-    dima: 'no', producto: 'nuevo', moneda: 'BOB', valor: 150000, aportePct: 20,
+    desgT: '', desgC: '', dimaT: '', dimaC: '', producto: 'nuevo', moneda: 'BOB', valor: 150000, aportePct: 20,
     tasaFija: 9, margenVar: 3, plazo: 60, periodoFijo: 24, msc: 'no', motor: 'normal'
   };
   return C.veh;
@@ -46,6 +46,7 @@ const siNo = (name, value, labels = ['Sí', 'No']) => `
     <label><input type="radio" name="${name}" value="si" ${value === 'si' ? 'checked' : ''}><span>${labels[0]}</span></label>
     <label><input type="radio" name="${name}" value="no" ${value !== 'si' ? 'checked' : ''}><span>${labels[1]}</span></label>
   </div>`;
+const chk = (name, value, label) => `<label class="chk"><input type="checkbox" name="${name}" ${value === 'si' ? 'checked' : ''}><span>${label}</span></label>`;
 const opciones = (name, value, ops) => `
   <div class="seg-toggle" role="radiogroup">
     ${ops.map(([v, l]) => `<label><input type="radio" name="${name}" value="${v}" ${value === v ? 'checked' : ''}><span>${l}</span></label>`).join('')}
@@ -82,10 +83,10 @@ function vehForm() {
     `)}
 
     ${seccion(2, 'Seguros', `
-      <div class="veh-row"><div><span>Seguro de desgravamen</span><div class="small muted" id="desgInfo">Según la edad de los clientes</div></div>
-        <span class="badge" id="desgBadge">—</span></div>
-      <div class="veh-row" id="dimaRow"><div><span>Seguro DIMA</span><div class="small muted" id="dimaInfo"></div></div>
-        ${siNo('dima', V.dima)}</div>
+      <div class="veh-row veh-seg"><div><span>Seguro de desgravamen</span><div class="small muted" id="desgInfo"></div></div>
+        <div class="chk-group">${chk('desgT', V.desgT, 'Titular')}${V.codeudor === 'si' ? chk('desgC', V.desgC, 'Codeudor') : ''}</div></div>
+      <div class="veh-row veh-seg"><div><span>Seguro DIMA</span><div class="small muted" id="dimaInfo"></div></div>
+        <div class="chk-group">${chk('dimaT', V.dimaT, 'Titular')}${V.codeudor === 'si' ? chk('dimaC', V.dimaC, 'Codeudor') : ''}</div></div>
       <div class="veh-row"><div><span>¿Seguro automotor MSC?</span><div class="small muted">Se suma al monto a financiar</div></div>${siNo('msc', V.msc)}</div>
       ${V.msc === 'si' ? `<div class="veh-row"><span>Tipo de vehículo</span>${opciones('motor', V.motor, [['normal', `Normal ${nf2.format(VEH.msc.normal)}%`], ['hibrido', `Híbrido / eléctrico ${nf2.format(VEH.msc.hibrido)}%`]])}</div>` : ''}
     `)}
@@ -126,31 +127,30 @@ function vehCalc() {
   const pintaEdad = (id, e) => { const b = $('#' + id); if (!b) return; b.textContent = e ? edadTxt(e) : 'Edad —'; b.className = 'badge ' + (!e ? 'gray' : elegible(e) ? '' : 'red'); };
   pintaEdad('edad_t', eT); pintaEdad('edad_c', eC);
 
-  // Desgravamen según edad (hasta 70 años y 360 días): cubre solo a quien cumple la edad.
-  // Si cumplen los dos → tasa mancomunada; si cumple uno → tasa individual; si ninguno → sin desgravamen.
+  // Desgravamen: el ejecutivo marca a quién cubre (nada viene marcado). Solo se puede marcar a quien
+  // tiene hasta 70 años y 360 días. Uno marcado → tasa individual; los dos → tasa titular y codeudor.
+  // DIMA: a elección, solo para quien tiene desgravamen marcado.
   const okT = elegible(eT), okC = conCodeudor && elegible(eC);
-  const fechasCompletas = !!eT && (!conCodeudor || !!eC);
-  const cubiertos = [okT && 'Titular', okC && 'Codeudor'].filter(Boolean);
-  const aplica = fechasCompletas && cubiertos.length > 0;
-  const ambos = cubiertos.length === 2;
-  let desg = 0, desgTxt = '';
-  if (aplica) { desg = ambos ? VEH.desgravamen.mancomunado : VEH.desgravamen.titular; desgTxt = `${ambos ? 'Titular y codeudor' : 'Solo ' + cubiertos[0].toLowerCase()} · ${pct3(desg)}% anual (${mensual(desg)}% mensual)`; }
-  else if (fechasCompletas) desgTxt = 'No aplica (supera la edad máxima)';
-  else desgTxt = 'Falta fecha de nacimiento';
-  // DIMA: solo existe si hay desgravamen, es a elección y cubre a las mismas personas
-  const dima = aplica && V.dima === 'si' ? (ambos ? VEH.dima.mancomunado : VEH.dima.titular) : 0;
-  $$('#vehForm input[name=dima]').forEach(r => { r.disabled = !aplica; });
-  const dimaRow = $('#dimaRow');
-  if (dimaRow) {
-    dimaRow.classList.toggle('veh-off', !aplica);
-    $('#dimaInfo').textContent = aplica
-      ? `${ambos ? 'Titular y codeudor' : 'Solo ' + cubiertos[0].toLowerCase()} ${pct3(ambos ? VEH.dima.mancomunado : VEH.dima.titular)}% anual (${mensual(ambos ? VEH.dima.mancomunado : VEH.dima.titular)}% mensual) sobre saldo capital`
-      : 'Solo disponible si aplica el desgravamen';
-  }
-  const badge = $('#desgBadge');
-  if (badge) { badge.textContent = desgTxt; badge.className = 'badge ' + (desg ? '' : fechasCompletas ? 'red' : 'gray'); }
+  const ajusta = (name, permitido) => {
+    const el = $(`#vehForm input[name=${name}]`);
+    if (!permitido && V[name] === 'si') V[name] = '';
+    if (el) { el.disabled = !permitido; el.checked = V[name] === 'si'; el.closest('.chk').classList.toggle('off', !permitido); }
+  };
+  if (!conCodeudor) { V.desgC = ''; V.dimaC = ''; }
+  ajusta('desgT', okT); ajusta('desgC', okC);
+  ajusta('dimaT', okT && V.desgT === 'si'); ajusta('dimaC', okC && V.desgC === 'si');
+  const nDesg = (V.desgT === 'si') + (V.desgC === 'si');
+  const nDima = (V.dimaT === 'si') + (V.dimaC === 'si');
+  const desg = nDesg === 2 ? VEH.desgravamen.mancomunado : nDesg === 1 ? VEH.desgravamen.titular : 0;
+  const dima = nDima === 2 ? VEH.dima.mancomunado : nDima === 1 ? VEH.dima.titular : 0;
+  const quien = (t, c) => t && c ? 'Titular y codeudor' : t ? 'Titular' : c ? 'Codeudor' : '';
+  const aplica = nDesg > 0;
+  const desgTxt = aplica ? `${quien(V.desgT === 'si', V.desgC === 'si')} · ${pct3(desg)}% anual (${mensual(desg)}% mensual)` : 'Sin desgravamen';
+  const dimaTxt = dima ? `${quien(V.dimaT === 'si', V.dimaC === 'si')} · ${pct3(dima)}% anual (${mensual(dima)}% mensual)` : '';
   const info = $('#desgInfo');
-  if (info) info.textContent = `Edad máxima ${VEH.edadMax.anios} años y ${VEH.edadMax.dias} días`;
+  if (info) info.textContent = aplica ? desgTxt : `1 persona ${pct3(VEH.desgravamen.titular)}% · 2 personas ${pct3(VEH.desgravamen.mancomunado)}% anual · hasta ${VEH.edadMax.anios} años y ${VEH.edadMax.dias} días`;
+  const dInfo = $('#dimaInfo');
+  if (dInfo) dInfo.textContent = dima ? dimaTxt : aplica ? `1 persona ${pct3(VEH.dima.titular)}% · 2 personas ${pct3(VEH.dima.mancomunado)}% anual` : 'Solo para quien tiene desgravamen';
 
   // Montos
   const valor = num(V.valor);
@@ -189,8 +189,8 @@ function vehCalc() {
   const avisos = [];
   if (!V.fnac) avisos.push('Ingresa la fecha de nacimiento del titular (obligatoria).');
   if (conCodeudor && !V.cFnac) avisos.push('Ingresa la fecha de nacimiento del codeudor (obligatoria).');
-  if (eT && !okT) avisos.push(`El titular supera la edad para desgravamen (${edadTxt(eT)}): no tendrá desgravamen ni DIMA.`);
-  if (conCodeudor && eC && !okC) avisos.push(`El codeudor supera la edad para desgravamen (${edadTxt(eC)}): no tendrá desgravamen ni DIMA.`);
+  if (eT && !okT) avisos.push(`El titular supera la edad para desgravamen (${edadTxt(eT)}): no puede llevar desgravamen ni DIMA.`);
+  if (conCodeudor && eC && !okC) avisos.push(`El codeudor supera la edad para desgravamen (${edadTxt(eC)}): no puede llevar desgravamen ni DIMA.`);
   if (mayor && plazoMax < 12) avisos.push(`El mayor de los clientes ya no puede tomar un crédito de al menos 12 meses sin pasar los ${VEH.edadCredito} años.`);
   else if (mayor && V.plazoAjustado && plazo === plazoMax) avisos.push(`Plazo ajustado a ${plazoMax} meses: el crédito no puede pasar de los ${VEH.edadCredito} años del mayor.`);
   if (num(V.periodoFijo) > plazo) avisos.push(`El periodo de tasa fija no puede superar el plazo (${plazo} meses).`);
@@ -235,7 +235,7 @@ function vehCalc() {
       <dt>Plazo</dt><dd>${plazo} meses (${plazo / 12} ${plazo === 12 ? 'año' : 'años'})</dd>
       <dt>Producto</dt><dd>${V.producto === 'nuevo' ? 'Vehículo nuevo' : 'Vehículo usado'}</dd>
       <dt>Desgravamen</dt><dd>${esc(desgTxt)}</dd>
-      <dt>DIMA</dt><dd>${dima ? pct3(dima) + '% anual (' + mensual(dima) + '% mensual)' : 'No'}</dd>
+      <dt>DIMA</dt><dd>${dima ? esc(dimaTxt) : 'No'}</dd>
     </dl>
   </div>
 
@@ -275,12 +275,13 @@ ROUTES.calculadora.after = () => {
   const rerender = ['codeudor', 'msc', 'plazo'];
   const onChange = e => {
     Object.entries(formData(form)).forEach(([k, v]) => { V[k] = v; });
+    $$('input[type=checkbox]', form).forEach(ch => { V[ch.name] = ch.checked ? 'si' : ''; });
     if (e.target.name === 'plazo') { V.plazoAjustado = false; if (num(V.periodoFijo) > num(V.plazo)) V.periodoFijo = V.plazo; }
     guardarCalc();
     if (rerender.includes(e.target.name)) { render(); return; }
     vehCalc();
   };
-  const esCambio = t => t.tagName === 'SELECT' || t.type === 'radio' || t.type === 'date';
+  const esCambio = t => t.tagName === 'SELECT' || t.type === 'radio' || t.type === 'checkbox' || t.type === 'date';
   form.addEventListener('input', e => { if (!esCambio(e.target)) onChange(e); });
   form.addEventListener('change', e => { if (esCambio(e.target)) onChange(e); });
   vehCalc();
