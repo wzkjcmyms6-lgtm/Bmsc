@@ -431,3 +431,33 @@ tr[data-act] td { cursor: pointer; }
   details.plan > * { display: block !important; }
   .table-wrap { max-height: none !important; overflow: visible !important; }
 }
+
+/* Simulador vehicular */
+.veh-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.veh-sec { padding: 16px; }
+.veh-sec-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.veh-sec-head h3 { margin: 0; font-size: 16px; }
+.veh-num { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; flex: none;
+  background: var(--green-700); color: #fff; font-weight: 800; font-size: 13px; }
+.veh-persona { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 12px 12px 2px; margin-bottom: 12px; }
+.veh-persona-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; }
+.veh-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); flex-wrap: wrap; }
+.veh-row:first-child { border-top: 0; }
+.veh-row > span, .veh-row > div > span { font-weight: 600; }
+.seg-toggle { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 11px; padding: 3px; gap: 2px; flex-wrap: wrap; }
+.seg-toggle label { cursor: pointer; }
+.seg-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.seg-toggle span { display: block; padding: 7px 14px; border-radius: 8px; font-size: 14px; font-weight: 650; color: var(--muted); white-space: nowrap; }
+.seg-toggle input:checked + span { background: var(--green-700); color: #fff; }
+.seg-toggle input:focus-visible + span { outline: 2px solid var(--gold); }
+.veh-tre { display: flex; flex-direction: column; justify-content: center; min-height: 46px; padding: 6px 12px;
+  border: 1px dashed var(--border); border-radius: 11px; background: var(--surface-2); }
+.veh-avisos { border-color: var(--orange); font-size: 13.5px; }
+.veh-avisos div + div { margin-top: 4px; }
+.veh-hero { margin-bottom: 10px; }
+.veh-cuota-big { font-size: 22px; font-weight: 800; letter-spacing: -.3px; }
+.veh-cuota-hero .veh-cuota-big { font-size: 30px; }
+.veh-desglose { display: flex; flex-wrap: wrap; gap: 4px 14px; opacity: .92; margin-top: 4px; }
+.veh-sep { height: 1px; background: rgba(255,255,255,.25); margin: 12px 0; }
+.hero .veh-cuota .muted { color: rgba(255,255,255,.8); }
+.veh-res-title { font-weight: 700; margin-bottom: 10px; }

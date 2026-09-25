@@ -655,8 +655,9 @@ ROUTES.parametros.render = () => {
         <span class="small muted" style="font-weight:500;margin-left:auto">${nf2.format(P.tasa)}% · RCI ${P.rci}%</span><span class="chev">${ICONS.chev}</span></summary>
         <div class="body"><div class="fields-2">${campos.map(([k, l]) => field({ label: l, name: `${id}.${k}`, type: 'money', value: P[k] })).join('')}</div></div></details>`;
     }).join('')}
-    <div class="section-title">UFV</div>
+    <div class="section-title">TRe y UFV</div>
     <div class="card">
+      ${field({ label: 'TRe MN manual % (vacío = automática)', name: 'treManual', type: 'money', value: st.treManual || '', hint: `Automática: ${nf2.format(st.tre?.mn || 3.65)}% (BCB)` })}
       ${field({ label: 'Valor UFV manual (vacío = automático del BCB)', name: 'ufvManual', type: 'money', value: st.ufvManual || '', hint: `Automático: Bs ${nf2.format(st.ufv?.valor || UFV_RESPALDO.valor)} al ${esc(st.ufv?.fecha || UFV_RESPALDO.fecha)}` })}
     </div>
     <button class="btn primary block" type="submit">Guardar parámetros</button>
@@ -675,11 +676,12 @@ ROUTES.parametros.after = () => {
     });
     S().settings.productos = productos;
     S().settings.ufvManual = num(d.ufvManual) || '';
+    S().settings.treManual = num(d.treManual) || '';
     Store.save(); toast('Parámetros guardados');
   });
   $('#paramReset').addEventListener('click', () => {
     if (!confirm('¿Volver a los valores referenciales?')) return;
-    S().settings.productos = {}; S().settings.ufvManual = ''; Store.save(); render(); toast('Parámetros restablecidos');
+    S().settings.productos = {}; S().settings.ufvManual = ''; S().settings.treManual = ''; Store.save(); render(); toast('Parámetros restablecidos');
   });
 };
 
