@@ -11,6 +11,14 @@ const VEH = {
   periodoSeguros: 12,                          // los % de seguros son anuales → se cobran /12 cada mes
   msc: { gasolina: 3.8, hibrido: 4.4 },        // % del valor del vehículo, se suma al monto a financiar
   plazos: [12, 24, 36, 48, 60, 72, 84, 96, 108, 120],
+  // Servicio de deudas: % máximo del sueldo bruto (sumado titular + codeudor)
+  codigos: [
+    { v: 'TC', l: 'TC · Tarjeta de crédito', g: 'consumo' },
+    { v: 'N', l: 'N · Otros créditos', g: 'consumo' },
+    { v: 'H0', l: 'H0 · Vivienda', g: 'vivienda' }, { v: 'H1', l: 'H1 · Vivienda', g: 'vivienda' }, { v: 'H2', l: 'H2 · Vivienda', g: 'vivienda' },
+    { v: 'H3', l: 'H3 · Vivienda social', g: 'social' }, { v: 'H4', l: 'H4 · Vivienda social', g: 'social' }
+  ],
+  limite: { consumo: 25, vivienda: 40, social: 37 },  // vivienda y social incluyen el 25% de consumo
   treMN: 3.65, treVigencia: 'septiembre 2026'  // TRe MN publicada por el BCB (respaldo)
 };
 const pct3 = v => new Intl.NumberFormat('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(v);
@@ -37,12 +45,14 @@ function vehState() {
     nombre: '', ci: '', fnac: '', codeudor: 'no', cNombre: '', cCi: '', cFnac: '',
     desgT: '', desgC: '', dimaT: '', dimaC: '',
     tasaFija: 9, margenVar: 3, plazo: 60, periodoFijo: 24,
-    estado: 'nuevo', motor: 'gasolina', valorUsd: 15000, tcVeh: '', msc: 'no'
+    estado: 'nuevo', motor: 'gasolina', valorUsd: 15000, tcVeh: '', msc: 'no',
+    brutoT: '', brutoC: '', deudas: []
   };
   const V = C.veh;
   if (V.motor !== 'hibrido') V.motor = 'gasolina';
   if (V.estado !== 'usado') V.estado = 'nuevo';
   if (V.valorUsd === undefined) V.valorUsd = 15000;
+  if (!Array.isArray(V.deudas)) V.deudas = [];
   return V;
 }
 
@@ -117,8 +127,65 @@ function vehForm() {
       <div class="veh-valor-bs"><span class="small muted">Valor en bolivianos</span><b class="num" id="valorBs">—</b></div>
       <div class="veh-row"><div><span>¿Seguro automotor MSC?</span><div class="small muted" id="mscInfo"></div></div>${siNo('msc', V.msc)}</div>
     `)}
+
+    ${seccion(5, 'Servicio de deudas mensual', `
+      <div class="fields-2">
+        ${field({ label: 'Sueldo bruto titular (Bs)', name: 'brutoT', type: 'money', value: V.brutoT })}
+        ${V.codeudor === 'si' ? field({ label: 'Sueldo bruto codeudor (Bs)', name: 'brutoC', type: 'money', value: V.brutoC }) : '<div></div>'}
+      </div>
+      <div class="deudas-head small muted"><span>Código</span><span>Cuota mensual (Bs)</span><span></span></div>
+      <div id="deudas">${V.deudas.map((d, i) => `
+        <div class="deuda-row">
+          <select name="d_${i}_cod">${VEH.codigos.map(c => `<option value="${c.v}" ${d.cod === c.v ? 'selected' : ''}>${esc(c.l)}</option>`).join('')}</select>
+          <input name="d_${i}_cuota" type="text" inputmode="decimal" placeholder="0,00" value="${esc(d.cuota || '')}">
+          <button type="button" class="icon-btn deuda-del" data-act="vehDeudaDel" data-i="${i}" aria-label="Quitar">${ICONS.x}</button>
+        </div>`).join('') || '<div class="small muted" style="padding:6px 0">Sin deudas registradas.</div>'}</div>
+      <button type="button" class="btn sm" data-act="vehDeudaAdd" style="margin-top:8px">${ICONS.plus} Agregar deuda</button>
+      <div class="small muted" style="margin-top:10px">TC y N: hasta ${VEH.limite.consumo}% del sueldo bruto · con H0–H2 el total hasta ${VEH.limite.vivienda}% · con H3–H4 hasta ${VEH.limite.social}% (incluyen el ${VEH.limite.consumo}%).</div>
+      <div id="capBox"></div>
+    `)}
   </form>
   <div id="vehOut"></div>`;
+}
+
+/* Capacidad de pago según el servicio de deudas */
+function capacidadDeudas(V, cuotaNueva) {
+  const bruto = num(V.brutoT) + (V.codeudor === 'si' ? num(V.brutoC) : 0);
+  const grupo = cod => (VEH.codigos.find(c => c.v === cod) || VEH.codigos[1]).g;
+  const suma = g => V.deudas.filter(d => grupo(d.cod) === g).reduce((a, d) => a + num(d.cuota), 0);
+  const cons = suma('consumo'), viv = suma('vivienda'), soc = suma('social');
+  const limTotal = soc ? VEH.limite.social : viv ? VEH.limite.vivienda : VEH.limite.consumo;
+  const consNuevo = cons + cuotaNueva;
+  const total = consNuevo + viv + soc;
+  const pc = bruto ? consNuevo / bruto * 100 : 0, pt = bruto ? total / bruto * 100 : 0;
+  const okCons = pc <= VEH.limite.consumo + 1e-9, okTotal = pt <= limTotal + 1e-9;
+  const maxNueva = Math.max(0, Math.min(bruto * VEH.limite.consumo / 100 - cons, bruto * limTotal / 100 - (cons + viv + soc)));
+  return { bruto, cons, viv, soc, limTotal, consNuevo, total, pc, pt, okCons, okTotal, cumple: okCons && okTotal, maxNueva };
+}
+function pintaCapacidad(V, cuotaNueva) {
+  const box = $('#capBox');
+  if (!box) return null;
+  const k = capacidadDeudas(V, cuotaNueva);
+  if (!k.bruto) { box.innerHTML = '<div class="card empty small" style="margin:12px 0 0">Ingresa el sueldo bruto para evaluar la capacidad de pago.</div>'; return k; }
+  const barra = (pctUsado, limite, ok) => `<div class="bar" style="height:10px;margin-top:4px"><span style="width:${Math.min(100, pctUsado / limite * 100)}%;background:${ok ? 'var(--green-600)' : 'var(--red)'}"></span></div>`;
+  box.innerHTML = `
+  <div class="cap-box ${cuotaNueva ? (k.cumple ? 'ok' : 'no') : ''}">
+    <div class="row between"><b>Capacidad de pago</b>${cuotaNueva ? `<span class="badge ${k.cumple ? '' : 'red'}">${k.cumple ? '✅ Cumple' : '❌ No cumple'}</span>` : ''}</div>
+    <div class="small muted">Sueldo bruto${V.codeudor === 'si' ? ' sumado' : ''}: <b class="num">Bs ${nf2.format(k.bruto)}</b></div>
+    <div class="cap-linea">
+      <div class="row between small"><span>TC + N${cuotaNueva ? ' + nuevo crédito' : ''}</span><span class="num"><b>${nf2.format(k.pc)}%</b> de ${VEH.limite.consumo}%</span></div>
+      ${barra(k.pc, VEH.limite.consumo, k.okCons)}
+      <div class="small muted num">Bs ${nf2.format(k.consNuevo)} de Bs ${nf2.format(k.bruto * VEH.limite.consumo / 100)}</div>
+    </div>
+    ${k.limTotal !== VEH.limite.consumo ? `<div class="cap-linea">
+      <div class="row between small"><span>Total con vivienda${k.soc ? ' social' : ''}</span><span class="num"><b>${nf2.format(k.pt)}%</b> de ${k.limTotal}%</span></div>
+      ${barra(k.pt, k.limTotal, k.okTotal)}
+      <div class="small muted num">Bs ${nf2.format(k.total)} de Bs ${nf2.format(k.bruto * k.limTotal / 100)}</div>
+    </div>` : ''}
+    <div class="row between" style="margin-top:10px"><span class="small">Cuota máxima para el nuevo crédito</span><b class="num">Bs ${nf2.format(k.maxNueva)}</b></div>
+    ${cuotaNueva ? `<div class="row between"><span class="small">Cuota del vehículo (la más alta)</span><b class="num" style="color:${k.cumple ? 'var(--green-600)' : 'var(--red)'}">Bs ${nf2.format(cuotaNueva)}</b></div>` : ''}
+  </div>`;
+  return k;
 }
 
 function vehCalc() {
@@ -224,6 +291,7 @@ function vehCalc() {
       </dl>
     </div>
     <div class="card empty small">💡 Ingresa el valor del vehículo para calcular la cuota.</div>`;
+    pintaCapacidad(V, 0);
     vehCalc.ultimo = null;
     return;
   }
@@ -233,6 +301,8 @@ function vehCalc() {
   const r = plan.rows;
   const c1 = r[0];
   const cVar = fijo < plazo ? r[fijo] : null;
+  const cuotaNueva = Math.max(r[0].total, cVar ? cVar.total : 0);
+  const cap = pintaCapacidad(V, cuotaNueva);
   const desgMes = x => x.saldo + x.capital; // saldo al inicio del mes
   const parte = (x, pctAnual) => desgMes(x) * pctAnual / 100 / VEH.periodoSeguros;
   const teac = Math.pow(1 + tirMensual(monto - primaMSC, r.map(x => x.total)), 12) - 1;
@@ -265,6 +335,7 @@ function vehCalc() {
       ${primaMSC ? `<dt>Seguro automotor MSC (${nf2.format(pctMSC)}%)</dt><dd class="num">+ ${fmt(primaMSC, m)}</dd>` : ''}
       <dt><b>Monto a financiar</b></dt><dd class="num"><b>${fmt(monto, m)}</b></dd>
       <dt>Plazo</dt><dd>${plazo} meses (${plazo / 12} ${plazo === 12 ? 'año' : 'años'})</dd>
+      ${cap && cap.bruto ? `<dt>Capacidad de pago</dt><dd>${cap.cumple ? '✅ Cumple' : '❌ No cumple'} · máx. Bs ${nf2.format(cap.maxNueva)}</dd>` : ''}
       <dt>Desgravamen</dt><dd>${esc(desgTxt)}</dd>
       <dt>DIMA</dt><dd>${dima ? esc(dimaTxt) : 'No'}</dd>
     </dl>
@@ -306,7 +377,11 @@ ROUTES.calculadora.after = () => {
   const rerender = ['codeudor', 'plazo'];
   // (motor, estado y seguro automotor se recalculan sin redibujar)
   const onChange = e => {
-    Object.entries(formData(form)).forEach(([k, v]) => { V[k] = v; });
+    Object.entries(formData(form)).forEach(([k, v]) => {
+      const m = k.match(/^d_(\d+)_(cod|cuota)$/);
+      if (m) { const d = V.deudas[+m[1]]; if (d) d[m[2]] = v; }
+      else V[k] = v;
+    });
     $$('input[type=checkbox]', form).forEach(ch => { V[ch.name] = ch.checked ? 'si' : ''; });
     if (e.target.name === 'periodoFijo') {
       const entero = String(Math.max(0, parseInt(String(V.periodoFijo), 10) || 0));
@@ -324,6 +399,8 @@ ROUTES.calculadora.after = () => {
 };
 
 Object.assign(ACTIONS, {
+  vehDeudaAdd: () => { vehState().deudas.push({ cod: 'N', cuota: '' }); guardarCalc(); render(); setTimeout(() => { const i = vehState().deudas.length - 1; $(`#vehForm [name=d_${i}_cuota]`)?.focus(); }, 50); },
+  vehDeudaDel: el => { vehState().deudas.splice(+el.dataset.i, 1); guardarCalc(); render(); },
   vehCompartir: () => {
     const u = vehCalc.ultimo; if (!u) return;
     const m = 'BOB';

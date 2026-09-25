@@ -476,3 +476,15 @@ tr[data-act] td { cursor: pointer; }
 .veh-valor-bs { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; margin: 2px 0 8px;
   border-radius: 12px; background: var(--green-50); border: 1px solid var(--green-100); }
 .veh-valor-bs b { font-size: 20px; color: var(--green-700); }
+
+/* Servicio de deudas */
+.deudas-head, .deuda-row { display: grid; grid-template-columns: 1.4fr 1fr 40px; gap: 8px; align-items: center; }
+.deudas-head { margin: 4px 0 4px; font-weight: 650; }
+.deuda-row { margin-bottom: 8px; }
+.deuda-row select, .deuda-row input { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text); font-size: 15px; font-family: inherit; min-width: 0; }
+.deuda-del { background: var(--surface-2); color: var(--muted); width: 40px; height: 40px; }
+.cap-box { margin-top: 12px; padding: 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); }
+.cap-box.ok { border-color: var(--green-500); background: var(--green-50); }
+.cap-box.no { border-color: var(--red); background: var(--red-soft); }
+.cap-linea { margin-top: 10px; }
