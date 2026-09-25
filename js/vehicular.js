@@ -90,8 +90,8 @@ function ingresoPersona(V, p, titulo) {
       <div class="small muted ing-detalle" id="ingDet${p}"></div>
     </div>`;
 }
-/* Ingreso de una persona según su tipo:
-   sueldo → se calcula el líquido con los descuentos de ley, pero para capacidad se usa el bruto;
+/* Ingreso de una persona según su tipo (el ingreso computable es siempre el líquido):
+   sueldo → sueldo bruto menos los descuentos de ley;
    jubilación → el monto ingresado ya es líquido; exterior → se descuentan impuestos. */
 function calcIngreso(tipo, monto, otros) {
   if (tipo === 'jubilacion') return { liquido: Math.max(0, monto - otros), computable: Math.max(0, monto - otros), detalle: monto ? `Líquido: Bs ${nf2.format(Math.max(0, monto - otros))}` : '' };
@@ -102,13 +102,12 @@ function calcIngreso(tipo, monto, otros) {
   }
   const l = liquidoAsalariado(monto);
   const liquido = Math.max(0, l.liquido - otros);
-  const computable = Math.max(0, monto - otros);
-  return { liquido, computable, detalle: monto ? `Descuentos de ley: − Bs ${nf2.format(l.laboral + l.ans)} (Gestora ${nf2.format(APORTES.laboral)}%${l.ans ? ' + Aporte Solidario' : ''})${otros ? ` · otros − Bs ${nf2.format(otros)}` : ''} · Líquido: Bs ${nf2.format(liquido)} · Para capacidad (bruto): Bs ${nf2.format(computable)}` : '' };
+  return { liquido, computable: liquido, detalle: monto ? `Descuentos de ley: − Bs ${nf2.format(l.laboral + l.ans)} (Gestora ${nf2.format(APORTES.laboral)}%${l.ans ? ' + Aporte Solidario' : ''})${otros ? ` · otros − Bs ${nf2.format(otros)}` : ''} · Líquido: Bs ${nf2.format(liquido)}` : '' };
 }
 function ingresosTotales(V) {
   const t = calcIngreso(V.tipoT, num(V.montoT), num(V.otrosT));
   const c = V.codeudor === 'si' && V.ingC === 'si' ? calcIngreso(V.tipoC, num(V.montoC), num(V.otrosC)) : null;
-  // Aguinaldo: solo si tiene crédito de vivienda; un sueldo al año ÷ 12 (solo ingresos por sueldo)
+  // Aguinaldo: solo si tiene crédito de vivienda; un sueldo al año ÷ 12 (solo ingresos por sueldo) se suma al líquido
   const agui = V.vivienda === 'si' && V.aguinaldo === 'si'
     ? (V.tipoT === 'sueldo' ? num(V.montoT) / 12 : 0) + (c && V.tipoC === 'sueldo' ? num(V.montoC) / 12 : 0) : 0;
   return { t, c, agui, computable: t.computable + (c ? c.computable : 0) + agui, liquido: t.liquido + (c ? c.liquido : 0) + agui };
@@ -176,7 +175,7 @@ function vehForm() {
       ${V.ingC === 'si' ? ingresoPersona(V, 'C', 'Codeudor') : ''}` : ''}
       <div class="veh-row"><span>¿Tiene crédito de vivienda?</span>${siNo('vivienda', V.vivienda)}</div>
       ${V.vivienda === 'si' ? `<div class="veh-row"><div><span>¿Tomar el aguinaldo?</span><div class="small muted" id="aguiInfo">Un sueldo al año, mensualizado (÷ 12)</div></div>${siNo('aguinaldo', V.aguinaldo)}</div>` : ''}
-      <div class="veh-valor-bs"><span class="small muted">Ingreso computable${V.codeudor === 'si' && V.ingC === 'si' ? ' sumado' : ''}</span><b class="num" id="ingTotal">—</b></div>
+      <div class="veh-valor-bs"><span class="small muted" id="ingEtiq">Ingreso computable (líquido)</span><b class="num" id="ingTotal">—</b></div>
     `)}
 
     ${seccion(6, 'Servicio de deudas mensual', `
@@ -188,7 +187,7 @@ function vehForm() {
           <button type="button" class="icon-btn deuda-del" data-act="vehDeudaDel" data-i="${i}" aria-label="Quitar">${ICONS.x}</button>
         </div>`).join('') || '<div class="small muted" style="padding:6px 0">Sin deudas registradas.</div>'}</div>
       <button type="button" class="btn sm" data-act="vehDeudaAdd" style="margin-top:8px">${ICONS.plus} Agregar deuda</button>
-      <div class="small muted" style="margin-top:10px">TC y N: hasta ${VEH.limite.consumo}% del ingreso computable · con H0–H2 el total hasta ${VEH.limite.vivienda}% · con H3–H4 hasta ${VEH.limite.social}% (incluyen el ${VEH.limite.consumo}%).</div>
+      <div class="small muted" style="margin-top:10px">TC y N: hasta ${VEH.limite.consumo}% del ingreso computable (líquido) · con H0–H2 el total hasta ${VEH.limite.vivienda}% · con H3–H4 hasta ${VEH.limite.social}% (incluyen el ${VEH.limite.consumo}%).</div>
       <div id="capBox"></div>
     `)}
   </form>
@@ -214,6 +213,7 @@ function pintaIngresos(V) {
   const d = $('#ingDetT'); if (d) d.textContent = ing.t.detalle;
   const dc = $('#ingDetC'); if (dc && ing.c) dc.textContent = ing.c.detalle;
   const tot = $('#ingTotal'); if (tot) tot.textContent = ing.computable ? `Bs ${nf2.format(ing.computable)}` : '—';
+  const et = $('#ingEtiq'); if (et) et.textContent = `Ingreso computable (líquido${ing.agui ? ' + aguinaldo ÷ 12' : ''})`;
   const ai = $('#aguiInfo');
   if (ai) ai.textContent = ing.agui ? `Aguinaldo mensualizado: + Bs ${nf2.format(ing.agui)} (sueldo ÷ 12)` : 'Un sueldo al año, mensualizado (÷ 12) · solo ingresos por sueldo';
   return ing;
