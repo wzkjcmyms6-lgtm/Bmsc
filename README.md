@@ -48,10 +48,33 @@ las clases A/B/C, la cartera total y las metas siempre se calculan con el dólar
 > GitHub solo ejecuta las tareas programadas desde la **rama principal** del repositorio: en Settings → General → Default branch
 > hay que elegir `Bmsc`. En Settings → Actions → General → Workflow permissions debe estar "Read and write permissions".
 
+## Base de datos en la nube (Firebase Firestore)
+La app guarda los datos en **Firestore** y mantiene una copia en el celular para funcionar sin internet.
+Lo que se registra en un dispositivo aparece en los demás en segundos.
+
+| Colección   | Contenido |
+|-------------|-----------|
+| `clientes`  | Un documento por cliente, con sus créditos |
+| `tramites`  | Trámites del Home Base (requisitos, tareas, bitácora) |
+| `agenda`    | Actividades |
+| `historial` | Registro de cada cambio: fecha, acción, ejecutivo y copia del dato en ese momento |
+
+**Configuración (una sola vez):**
+1. En https://console.firebase.google.com crea un proyecto, por ejemplo `mi-cartera-bmsc`.
+2. Menú **Firestore Database → Crear base de datos** (ubicación `southamerica-east1`, São Paulo).
+3. En la pestaña **Reglas**, pega el contenido de `firestore.rules` y publica.
+4. **Configuración del proyecto → Tus apps → Web (`</>`)**: registra la app y copia el objeto `firebaseConfig`.
+5. Pega esos valores en `js/firebase-config.js`.
+
+En **Más → Base de datos en la nube** se ve el estado de la conexión, el historial de cambios y un botón para enviar todo a la nube.
+En la ficha de cada cliente está su historial de cambios.
+
+Sin configuración, la app funciona igual, pero solo con los datos guardados en el dispositivo.
+
 ## Privacidad
-Los datos se guardan **solo en el dispositivo** (almacenamiento del navegador); no se envían a ningún servidor.
-Por eso conviene descargar un respaldo con frecuencia. Los requisitos de las guías son referenciales:
-valídalos siempre con la normativa interna vigente y con ASFI.
+Versión de prueba / demostración: las reglas de `firestore.rules` permiten leer y escribir a cualquiera que tenga el enlace.
+Antes de usar datos reales de clientes hay que agregar inicio de sesión (Firebase Auth) y restringir las reglas.
+Los requisitos de las guías son referenciales: valídalos siempre con la normativa interna vigente y con ASFI.
 
 ## Cómo usarla
 Es un sitio estático: no necesita compilación ni servidor propio.
@@ -68,6 +91,9 @@ index.html            Estructura y navegación
 css/styles.css        Estilos (paleta verde / dorado, modo oscuro)
 js/data.js            Catálogos: tipos de crédito, etapas, guías y requisitos
 js/store.js           Almacenamiento local
+js/nube.js            Sincronización con Firestore e historial
+js/firebase-config.js Configuración del proyecto de Firebase
+firestore.rules       Reglas de seguridad de Firestore
 js/app.js             Vistas y lógica
 data/tipo-cambio.json Tipo de cambio oficial (se actualiza solo)
 scripts/              Descarga del TCO del BCB

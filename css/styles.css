@@ -399,3 +399,11 @@ table.tbl th { color: var(--muted); font-weight: 650; font-size: 12px; position:
   .action-grid { grid-template-columns: repeat(3, 1fr); }
   .hero .big { font-size: 24px; }
 }
+
+/* Indicador de sincronización con la nube */
+.brand-mark { position: relative; }
+.cloud-dot { position: absolute; right: -3px; bottom: -3px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--green-800); background: #9aa; }
+.cloud-dot.conectado { background: #3ddc84; }
+.cloud-dot.conectando { background: var(--gold); }
+.cloud-dot.sin-conexion { background: #9aa; }
+.cloud-dot.error { background: var(--red); }

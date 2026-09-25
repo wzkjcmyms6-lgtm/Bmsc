@@ -1,0 +1,10 @@
+rules_version = '2';
+// Reglas para la etapa de prueba / demostración: cualquiera con el enlace puede leer y escribir.
+// Antes de usar datos reales de clientes, agregar inicio de sesión (Firebase Auth) y restringir el acceso.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{coleccion}/{id} {
+      allow read, write: if coleccion in ['clientes', 'tramites', 'agenda', 'historial'];
+    }
+  }
+}

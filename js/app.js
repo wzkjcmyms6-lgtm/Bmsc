@@ -356,7 +356,8 @@ const ROUTES = {
   'calculadora': { title: 'Calculadoras', nav: 'mas', render: viewCalc, back: '#/mas' },
   'ajustes': { title: 'Ajustes', nav: 'mas', render: viewSettings, back: '#/mas' },
   'respaldo': { title: 'Respaldo de datos', nav: 'mas', render: viewBackup, back: '#/mas' },
-  'tipo-cambio': { title: 'Dólar oficial', nav: 'inicio', render: viewTC, back: '#/' }
+  'tipo-cambio': { title: 'Dólar oficial', nav: 'inicio', render: viewTC, back: '#/' },
+  'historial': { title: 'Historial de cambios', nav: 'mas', render: viewHistorial, back: '#/mas' }
 };
 
 let current = { name: '', param: null };
@@ -704,6 +705,7 @@ function viewClient(id) {
 
   ${crossSell(c)}
 
+  ${window.Nube && Nube.estado !== 'sin-configurar' ? `<a class="btn block" style="margin-top:14px" href="#/historial/${c.id}">${ICONS.clock} Historial de cambios del cliente</a>` : ''}
   <div class="btn-row" style="margin-top:14px">
     <button class="btn" data-act="editClient" data-id="${c.id}">${ICONS.edit} Editar</button>
     <button class="btn danger" data-act="deleteClient" data-id="${c.id}">Eliminar</button>
@@ -1257,6 +1259,66 @@ function eventForm(e = {}, preset = {}) {
 /* =========================================================
    Vista: Más
    ========================================================= */
+const NUBE_TEXTO = {
+  'sin-configurar': ['⚪', 'Sin configurar', 'Los datos se guardan solo en este dispositivo. Agrega la configuración de Firebase en js/firebase-config.js.'],
+  'conectando': ['🟡', 'Conectando…', 'Estableciendo conexión con Firestore.'],
+  'conectado': ['🟢', 'Sincronizado', 'Los cambios se guardan en Firestore y aparecen en todos tus dispositivos.'],
+  'sin-conexion': ['⚪', 'Sin conexión', 'Puedes seguir trabajando: los cambios se enviarán al volver internet.'],
+  'error': ['🔴', 'Error de conexión', '']
+};
+function nubeCard() {
+  const N = window.Nube || { estado: 'sin-configurar' };
+  const [ic, t, d] = NUBE_TEXTO[N.estado] || NUBE_TEXTO.error;
+  return `<div class="card">
+    <div class="row"><div class="icon-dot">☁️</div>
+      <div class="grow"><div style="font-weight:700">${ic} Firestore · ${esc(t)}</div>
+      <div class="small muted">${N.proyecto ? 'Proyecto ' + esc(N.proyecto) + ' · ' : ''}${esc(N.estado === 'error' ? N.error : d)}</div></div>
+    </div>
+    ${N.estado !== 'sin-configurar' ? `<div class="btn-row" style="margin-top:12px">
+      <a class="btn sm" href="#/historial">${ICONS.clock} Historial de cambios</a>
+      <button class="btn sm" data-act="syncNube">↻ Enviar todo a la nube</button>
+    </div>` : ''}
+  </div>`;
+}
+
+const fmtFechaHora = iso => { if (!iso) return ''; const d = new Date(iso); return `${d.getDate()} ${MESES[d.getMonth()]} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const ACCIONES = {
+  crear: ['🆕', 'Creado'], editar: ['✏️', 'Editado'], eliminar: ['🗑️', 'Eliminado'], credito: ['💳', 'Crédito agregado o editado'],
+  'eliminar-credito': ['💳', 'Crédito eliminado'], desvincular: ['🔗', 'Desvinculado'], restaurar: ['📥', 'Datos restaurados'],
+  borrar: ['🧹', 'Datos borrados'], sincronizar: ['☁️', 'Sincronización completa']
+};
+const accionLabel = a => (ACCIONES[a] || ['', a])[1];
+
+function viewHistorial(docId) {
+  const N = window.Nube;
+  if (!N || N.estado === 'sin-configurar') return `<div class="card empty"><div class="ico">☁️</div>El historial se guarda en Firestore. Configura la conexión para activarlo.</div>`;
+  const cargar = async () => {
+    const box = $('#histList');
+    try {
+      const items = await N.historial({ docId, max: docId ? 200 : 150 });
+      viewHistorial.items = items;
+      if (!$('#histList')) return;
+      box.innerHTML = items.length ? items.map(h => {
+        const [ic] = ACCIONES[h.accion] || ['•'];
+        return `<div class="list-item" ${h.datos ? `data-act="verVersion" data-id="${h.id}"` : ''}>
+          <div class="icon-dot">${ic}</div>
+          <div class="grow"><div class="title">${esc(h.tipo)} · ${esc(accionLabel(h.accion))}</div>
+          <div class="sub">${esc(h.resumen)}</div>
+          <div class="sub">${fmtFechaHora(h.fechaLocal)}${h.ejecutivo ? ' · ' + esc(h.ejecutivo) : ''}</div></div>
+          ${h.datos ? `<span class="muted">${ICONS.chev}</span>` : ''}
+        </div>`;
+      }).join('') : '<div class="empty">Aún no hay cambios registrados.</div>';
+    } catch (e) {
+      if (box) box.innerHTML = `<div class="empty">No se pudo cargar el historial (${esc(e.message)}).</div>`;
+    }
+  };
+  setTimeout(() => (N.estado === 'conectando' ? setTimeout(cargar, 1500) : cargar()), 0);
+  const c = docId && Store.client(docId);
+  return `
+  <p class="small muted" style="margin:0 2px 10px">${c ? `Cambios registrados de <b>${esc(c.nombre)}</b>.` : 'Últimos cambios registrados en la base de datos.'} Toca un registro para ver cómo estaba en ese momento.</p>
+  <div class="card tight" id="histList"><div class="empty">Cargando…</div></div>`;
+}
+
 function viewMore() {
   const item = (href, icon, t, s, act = '') => `
     <a class="list-item" ${act ? `data-act="${act}"` : `href="${href}"`}>
@@ -1271,6 +1333,8 @@ function viewMore() {
     ${item('', 'book', 'Guías de crédito', 'Requisitos y consejos por tipo de crédito', 'openGuides')}
     ${item('', 'bulb', 'Consejos para el ejecutivo', 'Buenas prácticas de gestión de cartera', 'openTips')}
   </div>
+  <div class="section-title">Base de datos en la nube</div>
+  ${nubeCard()}
   <div class="section-title">Configuración</div>
   <div class="card tight">
     ${item('#/ajustes', 'gear', 'Ajustes y metas', 'Tu nombre, agencia, tipo de cambio y metas')}
@@ -1707,7 +1771,7 @@ const ACTIONS = {
   editEvent: el => eventForm(S().agenda.find(e => e.id === el.dataset.id)),
   toggleAgenda: el => {
     if (el.dataset.kind === 'event') {
-      const e = S().agenda.find(x => x.id === el.dataset.id); e.done = el.checked; Store.save();
+      const e = S().agenda.find(x => x.id === el.dataset.id); Store.upsertEvent({ ...e, done: el.checked });
     } else {
       const k = Store.caseById(el.dataset.case); const t = k.tareas.find(x => x.id === el.dataset.id);
       t.done = el.checked; if (t.done) logCase(k, `Tarea completada: ${t.t}`); Store.upsertCase(k);
@@ -1727,11 +1791,28 @@ const ACTIONS = {
   openTips: () => { UI.hbTab = 'consejos'; location.hash = '#/homebase'; },
   pinSetup: () => pinSetup(),
   refreshTC: () => actualizarTC({ avisar: true }),
+  syncNube: async () => {
+    try { await Nube.sincronizarTodo(); toast('Datos enviados a la nube'); } catch (e) { toast('No se pudo sincronizar: ' + e.message); }
+  },
+  verVersion: el => {
+    const h = (viewHistorial.items || []).find(x => x.id === el.dataset.id);
+    if (!h?.datos) return;
+    const d = h.datos;
+    const omit = ['id', 'credits', 'requisitos', 'tareas', 'bitacora'];
+    const rows = Object.entries(d).filter(([k, v]) => !omit.includes(k) && v !== '' && v !== null && typeof v !== 'object');
+    openSheet(`${h.tipo} · ${fmtFechaHora(h.fechaLocal)}`, `
+      <p class="small muted" style="margin-top:0">Así estaba el registro después de este cambio (${esc(accionLabel(h.accion))}).</p>
+      <div class="card"><dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl></div>
+      ${d.credits ? `<div class="section-title">Créditos (${d.credits.length})</div><div class="card tight">${d.credits.map(cr => `
+        <div class="list-item"><div class="grow"><div class="title">${esc(tipoInfo(cr.tipo).label)} · ${esc(estadoInfo(cr.estado).label)}</div>
+        <div class="sub">Monto ${money(num(cr.monto), cr.moneda)} · saldo ${money(num(cr.saldo) || num(cr.monto), cr.moneda)}</div></div></div>`).join('')}</div>` : ''}
+      ${d.requisitos ? `<p class="small muted">Requisitos cumplidos: ${d.requisitos.filter(r => r.done).length}/${d.requisitos.length}</p>` : ''}`);
+  },
   exportJSON: () => { download(`mi_cartera_respaldo_${today()}.json`, JSON.stringify({ ...S(), settings: { ...S().settings, pinHash: null } }, null, 2), 'application/json'); toast('Respaldo descargado'); },
   exportCSV: () => { exportCSV(); toast('Archivo CSV descargado'); },
   loadDemo: () => loadDemo(),
   wipe: () => {
-    if (!confirm('¿Borrar TODOS los datos de la app? Descarga un respaldo antes.')) return;
+    if (!confirm(`¿Borrar TODOS los datos de la app${window.Nube && Nube.estado !== 'sin-configurar' ? ' (también en la nube, en todos los dispositivos)' : ''}? Descarga un respaldo antes.`)) return;
     if (prompt('Escribe BORRAR para confirmar') !== 'BORRAR') return;
     Store.reset(); applyTheme(); toast('Datos borrados'); location.hash = '#/';
   }
@@ -1770,6 +1851,16 @@ $('#quickAdd').addEventListener('click', () => {
 /* =========================================================
    Inicio
    ========================================================= */
+function actualizarNubeUI() {
+  const dot = $('#cloudDot');
+  const est = window.Nube?.estado || 'sin-configurar';
+  dot.className = 'cloud-dot ' + est;
+  dot.classList.toggle('hidden', est === 'sin-configurar');
+  dot.title = (NUBE_TEXTO[est] || [])[1] || '';
+  if (current.name === 'mas') render();
+}
+window.addEventListener('nube-estado', actualizarNubeUI);
+
 applyTheme();
 route();
 lockIfNeeded();

@@ -58,10 +58,25 @@ const Store = (() => {
 
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
+  /* Aviso de cambios para la sincronización con la nube (js/nube.js).
+     col: 'clients' | 'cases' | 'agenda'; op: 'set' | 'delete' | 'bulk' */
+  const listeners = [];
+  const emit = (col, op, doc, accion) => listeners.forEach(fn => { try { fn({ col, op, doc, accion }); } catch (e) { console.error(e); } });
+
   return {
     get: () => state,
     save,
     uid,
+    subscribe: fn => listeners.push(fn),
+    /* Datos que llegan desde la nube: se guardan sin volver a enviarlos */
+    applyRemote(col, docs) {
+      const antes = JSON.stringify(state[col]);
+      const ahora = JSON.stringify(docs);
+      if (antes === ahora) return false;
+      state[col] = docs;
+      save();
+      return true;
+    },
     replace(data) {
       const base = empty();
       state = {
@@ -70,25 +85,32 @@ const Store = (() => {
         clients: data.clients || [], cases: data.cases || [], agenda: data.agenda || []
       };
       save();
+      emit(null, 'bulk', null, 'restaurar');
     },
-    reset() { state = empty(); save(); },
+    reset() { const pin = state.settings.pinHash; state = empty(); state.settings.pinHash = pin; save(); emit(null, 'bulk', null, 'borrar'); },
 
     /* ---- Clientes ---- */
     client: id => state.clients.find(c => c.id === id),
     upsertClient(c) {
+      let doc, accion = 'editar';
       if (c.id) {
         const i = state.clients.findIndex(x => x.id === c.id);
-        state.clients[i] = { ...state.clients[i], ...c };
+        doc = state.clients[i] = { ...state.clients[i], ...c };
       } else {
         c.id = uid(); c.creado = new Date().toISOString(); c.credits = c.credits || [];
-        state.clients.push(c);
+        state.clients.push(c); doc = c; accion = 'crear';
       }
-      save(); return c;
+      doc.actualizado = new Date().toISOString();
+      save(); emit('clients', 'set', doc, accion);
+      return doc;
     },
     deleteClient(id) {
+      const doc = this.client(id);
       state.clients = state.clients.filter(c => c.id !== id);
-      state.cases.forEach(k => { if (k.clientId === id) k.clientId = null; });
-      state.agenda.forEach(a => { if (a.clientId === id) a.clientId = null; });
+      save();
+      emit('clients', 'delete', doc, 'eliminar');
+      state.cases.forEach(k => { if (k.clientId === id) { k.clientId = null; k.prospecto = k.prospecto || doc?.nombre || ''; emit('cases', 'set', k, 'desvincular'); } });
+      state.agenda.forEach(a => { if (a.clientId === id) { a.clientId = null; emit('agenda', 'set', a, 'desvincular'); } });
       save();
     },
     upsertCredit(clientId, cr) {
@@ -100,37 +122,52 @@ const Store = (() => {
       } else {
         cr.id = uid(); c.credits.push(cr);
       }
-      save(); return cr;
+      c.actualizado = new Date().toISOString();
+      save(); emit('clients', 'set', c, 'credito');
+      return cr;
     },
     deleteCredit(clientId, creditId) {
       const c = this.client(clientId);
       c.credits = c.credits.filter(x => x.id !== creditId);
-      save();
+      c.actualizado = new Date().toISOString();
+      save(); emit('clients', 'set', c, 'eliminar-credito');
     },
 
     /* ---- Casos (Home Base) ---- */
     caseById: id => state.cases.find(c => c.id === id),
     upsertCase(k) {
+      let doc, accion = 'editar';
       if (k.id) {
         const i = state.cases.findIndex(x => x.id === k.id);
-        state.cases[i] = { ...state.cases[i], ...k };
+        doc = state.cases[i] = { ...state.cases[i], ...k };
       } else {
         k.id = uid(); k.creado = new Date().toISOString();
         k.requisitos = k.requisitos || []; k.tareas = k.tareas || []; k.bitacora = k.bitacora || [];
-        state.cases.push(k);
+        state.cases.push(k); doc = k; accion = 'crear';
       }
-      save(); return k;
+      save(); emit('cases', 'set', doc, accion);
+      return doc;
     },
-    deleteCase(id) { state.cases = state.cases.filter(c => c.id !== id); save(); },
+    deleteCase(id) {
+      const doc = this.caseById(id);
+      state.cases = state.cases.filter(c => c.id !== id);
+      save(); emit('cases', 'delete', doc, 'eliminar');
+    },
 
     /* ---- Agenda ---- */
     upsertEvent(e) {
+      let doc, accion = 'editar';
       if (e.id) {
         const i = state.agenda.findIndex(x => x.id === e.id);
-        state.agenda[i] = { ...state.agenda[i], ...e };
-      } else { e.id = uid(); e.done = false; state.agenda.push(e); }
-      save(); return e;
+        doc = state.agenda[i] = { ...state.agenda[i], ...e };
+      } else { e.id = uid(); e.done = false; state.agenda.push(e); doc = e; accion = 'crear'; }
+      save(); emit('agenda', 'set', doc, accion);
+      return doc;
     },
-    deleteEvent(id) { state.agenda = state.agenda.filter(e => e.id !== id); save(); }
+    deleteEvent(id) {
+      const doc = state.agenda.find(e => e.id === id);
+      state.agenda = state.agenda.filter(e => e.id !== id);
+      save(); emit('agenda', 'delete', doc, 'eliminar');
+    }
   };
 })();
