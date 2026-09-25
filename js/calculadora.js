@@ -131,8 +131,8 @@ const TABS_CALC = [
 ];
 function viewCalculadora() {
   const C = calcState();
-  const tabs = `<div class="chips calc-tabs no-print">${TABS_CALC.map(([id, l]) =>
-    `<button class="chip ${C.tab === id ? 'active' : ''}" data-act="calcTab" data-id="${id}">${l}</button>`).join('')}</div>`;
+  C.tab = 'simulador'; // por ahora la calculadora muestra solo el simulador
+  const tabs = '';
   const body = { simulador: simForm, capacidad: capForm, tarjeta: tjForm, prepago: preForm, conversor: convForm }[C.tab]();
   return tabs + body + `<p class="small muted center no-print">Cálculos referenciales. Aplica siempre la normativa interna vigente del banco.</p>`;
 }
@@ -294,7 +294,6 @@ function simCalc() {
   <div class="btn-row no-print" style="margin:10px 0">
     <button class="btn sm" data-act="simCompartir">${ICONS.wa} Compartir</button>
     <button class="btn sm" data-act="simTramite">${ICONS.folder} Crear trámite</button>
-    <button class="btn sm" data-act="simCapacidad">📊 Evaluar cliente</button>
     <button class="btn sm" onclick="window.print()">🖨️ PDF</button>
   </div>
 
