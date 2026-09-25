@@ -215,6 +215,7 @@ function vehForm() {
     `)}
 
     ${seccion(7, 'Financiamiento', `
+      <div id="finMax"></div>
       <div class="fin-linea">
         <div><span>Compra de vehículo</span><div class="small muted" id="finPct">Monto que financia el banco según la campaña</div></div>
         <div class="fin-input"><span>Bs</span><input name="compra" type="text" inputmode="decimal" placeholder="0,00" value="${esc(V.compra || '')}"></div>
@@ -389,6 +390,29 @@ function vehCalc() {
     ? `Tasa desde el mes ${fijo + 1}: TRe ${nf2.format(treMN())}% + ${nf2.format(num(V.margenVar))}% = <b>${nf2.format(tasaVar)}%</b>`
     : 'Tasa fija durante todo el plazo';
 
+  // Monto máximo (sección 7): la cuota más alta del crédito no puede pasar la cuota máxima que deja la
+  // capacidad de pago (sección 6). La cuota (capital + interés + seguros) es proporcional al monto,
+  // así que se calcula la cuota de Bs 100.000 y se escala.
+  const segMensual = (desg + dima) / VEH.periodoSeguros; // % mensual sobre saldo
+  const planDe = mto => generarPlan({ monto: mto, n: plazo, tasa: num(V.tasaFija), sistema: 'frances', gracia: 0, mesesFijos: fijo < plazo ? fijo : 0, tasaVar, desg: segMensual, seguroMes: 0, fecha: today() });
+  const cuotaMaxDe = pl => Math.max(pl.rows[0].total, fijo < plazo ? pl.rows[fijo].total : 0);
+  const base = 100000, cuotaBase = cuotaMaxDe(planDe(base));
+  const kMax = capacidadDeudas(V, 0);
+  const montoMax = kMax.bruto && cuotaBase > 0 ? Math.floor(kMax.maxNueva / cuotaBase * base * 100) / 100 : 0;
+  const compraMax = Math.max(0, montoMax - primaMSC);
+  const fm = $('#finMax');
+  if (fm) fm.innerHTML = !kMax.bruto
+    ? '<div class="fin-max vacio small">Ingresa los ingresos (sección 5) para calcular el monto máximo a financiar.</div>'
+    : `<div class="fin-max ${compra > compraMax + 0.005 ? 'excede' : ''}">
+        <div class="row between"><span>Monto máximo a financiar</span><b class="num">Bs ${nf2.format(montoMax)}</b></div>
+        <div class="small muted">Cuota máxima Bs ${nf2.format(kMax.maxNueva)} (capacidad de pago) · ${plazo} meses · ${nf2.format(num(V.tasaFija))}%${fijo < plazo ? ` / ${nf2.format(tasaVar)}%` : ''}${desg ? ' · con seguros' : ''}</div>
+        ${primaMSC ? `<div class="small muted">− Seguro vehicular BMSC Bs ${nf2.format(primaMSC)}</div>` : ''}
+        <div class="row between fin-max-compra"><span>Compra máxima de vehículo</span><b class="num">Bs ${nf2.format(compraMax)}</b></div>
+        ${valor ? `<div class="small muted">${nf2.format(compraMax / valor * 100)}% del valor del vehículo${compraMax > valor ? ' · la capacidad alcanza para más que el valor del vehículo' : ''}</div>` : ''}
+        ${compra > compraMax + 0.005 ? `<div class="small fin-max-aviso">⚠️ La compra ingresada supera el máximo en Bs ${nf2.format(compra - compraMax)}</div>` : ''}
+        ${compraMax > 0 ? `<button type="button" class="btn sm" data-act="vehUsarMax" data-v="${compraMax.toFixed(2)}">Usar el máximo</button>` : ''}
+      </div>`;
+
   const avisos = [];
   if (!V.fnac) avisos.push('Ingresa la fecha de nacimiento del titular (obligatoria).');
   if (conCodeudor && !V.cFnac) avisos.push('Ingresa la fecha de nacimiento del codeudor (obligatoria).');
@@ -419,8 +443,7 @@ function vehCalc() {
     return;
   }
 
-  const segMensual = (desg + dima) / VEH.periodoSeguros; // % mensual sobre saldo
-  const plan = generarPlan({ monto, n: plazo, tasa: num(V.tasaFija), sistema: 'frances', gracia: 0, mesesFijos: fijo < plazo ? fijo : 0, tasaVar, desg: segMensual, seguroMes: 0, fecha: today() });
+  const plan = planDe(monto);
   const r = plan.rows;
   const c1 = r[0];
   const cVar = fijo < plazo ? r[fijo] : null;
@@ -531,6 +554,7 @@ Object.assign(ACTIONS, {
     if (V.ingC === 'si' && V.codeudor !== 'si') { V.codeudor = 'si'; toast('Codeudor activado: completa sus datos en la sección 1'); }
     guardarCalc(); render();
   },
+  vehUsarMax: el => { vehState().compra = el.dataset.v.replace('.', ','); guardarCalc(); render(); },
   vehDeudaDel: el => { vehState().deudas.splice(+el.dataset.i, 1); guardarCalc(); render(); },
   vehCompartir: () => {
     const u = vehCalc.ultimo; if (!u) return;

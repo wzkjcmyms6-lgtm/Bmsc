@@ -514,4 +514,15 @@ tr[data-act] td { cursor: pointer; }
 .veh-persona input[type=date] { -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; display: block; min-height: 46px; text-align: left; }
 .veh-persona input[type=date]::-webkit-date-and-time-value { text-align: left; }
 .veh-add { margin: 4px 0 12px; border-style: dashed; }
-.link-btn { background: none; border: 0; padding: 4px 0; color: var(--danger, #c0392b); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
+.link-btn { background: none; border: 0; padding: 4px 0; color: var(--red); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
+
+/* Monto máximo a financiar (sección 7) */
+.fin-max { border: 1px solid var(--border); background: var(--surface-2); border-radius: 14px; padding: 12px 14px; margin-bottom: 8px; display: grid; gap: 3px; }
+.fin-max .row { gap: 10px; align-items: baseline; }
+.fin-max .row b, #finSeg { font-size: 17px; color: var(--green-600); white-space: nowrap; }
+#finSeg { font-size: inherit; color: inherit; }
+.fin-max-compra { margin-top: 6px; padding-top: 8px; border-top: 1px dashed var(--border); }
+.fin-max .btn { justify-self: start; margin-top: 8px; }
+.fin-max.excede { border-color: var(--red); background: var(--red-soft); }
+.fin-max-aviso { color: var(--red); font-weight: 650; margin-top: 4px; }
+.fin-max.vacio { color: var(--muted); }
