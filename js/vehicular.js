@@ -9,7 +9,7 @@ const VEH = {
   desgravamen: { titular: 1.250, mancomunado: 2.251 }, // % sobre saldo capital
   dima: { titular: 0.36, mancomunado: 0.72 },          // % sobre saldo capital
   periodoSeguros: 12,                          // los % de seguros son anuales → se cobran /12 cada mes
-  msc: { normal: 3.8, hibrido: 4.4 },          // % del valor del vehículo, se suma al monto a financiar
+  msc: { gasolina: 3.8, hibrido: 4.4 },        // % del valor del vehículo, se suma al monto a financiar
   plazos: [12, 24, 36, 48, 60, 72, 84, 96, 108, 120],
   treMN: 3.65, treVigencia: 'septiembre 2026'  // TRe MN publicada por el BCB (respaldo)
 };
@@ -35,10 +35,15 @@ function vehState() {
   const C = calcState();
   C.veh = C.veh || {
     nombre: '', ci: '', fnac: '', codeudor: 'no', cNombre: '', cCi: '', cFnac: '',
-    desgT: '', desgC: '', dimaT: '', dimaC: '', producto: 'nuevo', moneda: 'BOB', valor: 150000, aportePct: 20,
-    tasaFija: 9, margenVar: 3, plazo: 60, periodoFijo: 24, msc: 'no', motor: 'normal'
+    desgT: '', desgC: '', dimaT: '', dimaC: '',
+    tasaFija: 9, margenVar: 3, plazo: 60, periodoFijo: 24,
+    estado: 'nuevo', motor: 'gasolina', valorUsd: 15000, tcVeh: '', msc: 'no'
   };
-  return C.veh;
+  const V = C.veh;
+  if (V.motor !== 'hibrido') V.motor = 'gasolina';
+  if (V.estado !== 'usado') V.estado = 'nuevo';
+  if (V.valorUsd === undefined) V.valorUsd = 15000;
+  return V;
 }
 
 const siNo = (name, value, labels = ['Sí', 'No']) => `
@@ -101,6 +106,17 @@ function vehForm() {
       ${field({ label: 'Plazo tasa fija (meses)', name: 'periodoFijo', type: 'number', value: V.periodoFijo, attrs: `inputmode="numeric" min="0" max="${V.plazo}" step="1"`, hint: 'Solo números enteros, sin superar el plazo' })}
       <div class="small muted" id="tasaVarInfo"></div>
     `)}
+
+    ${seccion(4, 'Vehículo a financiar', `
+      <div class="veh-row"><span>Vehículo</span>${opciones('estado', V.estado, [['nuevo', 'Nuevo'], ['usado', 'Usado']])}</div>
+      <div class="veh-row"><span>Tipo de motor</span>${opciones('motor', V.motor, [['gasolina', 'A gasolina'], ['hibrido', 'Eléctrico / híbrido']])}</div>
+      <div class="fields-2">
+        ${field({ label: 'Valor del vehículo ($us)', name: 'valorUsd', type: 'money', value: V.valorUsd })}
+        ${field({ label: 'Tipo de cambio (Bs por $us)', name: 'tcVeh', type: 'money', value: V.tcVeh || String(tc()).replace('.', ','), hint: `Oficial BCB hoy: ${nf2.format(tc())}` })}
+      </div>
+      <div class="veh-valor-bs"><span class="small muted">Valor en bolivianos</span><b class="num" id="valorBs">—</b></div>
+      <div class="veh-row"><div><span>¿Seguro automotor MSC?</span><div class="small muted" id="mscInfo"></div></div>${siNo('msc', V.msc)}</div>
+    `)}
   </form>
   <div id="vehOut"></div>`;
 }
@@ -109,7 +125,7 @@ function vehCalc() {
   const out = $('#vehOut');
   if (!out) return;
   const V = vehState();
-  const m = V.moneda;
+  const m = 'BOB';
   const conCodeudor = V.codeudor === 'si';
   const eT = edadDe(V.fnac), eC = conCodeudor ? edadDe(V.cFnac) : null;
 
@@ -144,8 +160,16 @@ function vehCalc() {
 
   // Montos
   // El monto del crédito se definirá en la próxima sección; por ahora se muestra un resumen de la propuesta
-  const valor = 0, aporte = 0, primaMSC = 0;
-  const monto = num(V.monto);
+  // Vehículo a financiar: valor en $us × tipo de cambio (editable) = valor en Bs
+  const tcVeh = num(V.tcVeh) || tc();
+  const valorUsd = num(V.valorUsd);
+  const valor = valorUsd * tcVeh;
+  const pctMSC = VEH.msc[V.motor] || VEH.msc.gasolina;
+  const primaMSC = V.msc === 'si' ? valor * pctMSC / 100 : 0;
+  const monto = valor + primaMSC;
+  const vb = $('#valorBs'); if (vb) vb.textContent = valor ? `Bs ${nf2.format(valor)}` : '—';
+  const mi = $('#mscInfo');
+  if (mi) mi.textContent = `${V.motor === 'hibrido' ? 'Eléctrico / híbrido' : 'A gasolina'}: ${nf2.format(pctMSC)}% del valor${primaMSC ? ` = Bs ${nf2.format(primaMSC)}` : ''} · se suma al monto a financiar`;
   // Plazo máximo: el crédito debe terminar antes de que el mayor de los dos pase los 76 años
   const fechas = [V.fnac, conCodeudor ? V.cFnac : null].map(parseDate).filter(Boolean);
   const mayor = fechas.length ? new Date(Math.min(...fechas)) : null;
@@ -199,7 +223,7 @@ function vehCalc() {
         <dt>Plazo</dt><dd>${plazo} meses (${plazo / 12} ${plazo === 12 ? 'año' : 'años'})</dd>
       </dl>
     </div>
-    <div class="card empty small">💡 Falta el monto del crédito para calcular la cuota. Se agregará en la siguiente sección.</div>`;
+    <div class="card empty small">💡 Ingresa el valor del vehículo para calcular la cuota.</div>`;
     vehCalc.ultimo = null;
     return;
   }
@@ -236,12 +260,11 @@ function vehCalc() {
   <div class="card">
     <div class="veh-res-title">Resumen del financiamiento</div>
     <dl class="kv">
-      <dt>Valor del vehículo</dt><dd class="num">${fmt(valor, m)}</dd>
-      <dt>Aporte propio (${nf2.format(num(V.aportePct))}%)</dt><dd class="num">− ${fmt(aporte, m)}</dd>
-      ${primaMSC ? `<dt>Seguro automotor MSC (${nf2.format(VEH.msc[V.motor])}%)</dt><dd class="num">+ ${fmt(primaMSC, m)}</dd>` : ''}
+      <dt>Vehículo</dt><dd>${V.estado === 'usado' ? 'Usado' : 'Nuevo'} · ${V.motor === 'hibrido' ? 'eléctrico / híbrido' : 'a gasolina'}</dd>
+      <dt>Valor del vehículo</dt><dd class="num">$us ${nf2.format(valorUsd)} × ${nf2.format(tcVeh)} = ${fmt(valor, m)}</dd>
+      ${primaMSC ? `<dt>Seguro automotor MSC (${nf2.format(pctMSC)}%)</dt><dd class="num">+ ${fmt(primaMSC, m)}</dd>` : ''}
       <dt><b>Monto a financiar</b></dt><dd class="num"><b>${fmt(monto, m)}</b></dd>
       <dt>Plazo</dt><dd>${plazo} meses (${plazo / 12} ${plazo === 12 ? 'año' : 'años'})</dd>
-      <dt>Producto</dt><dd>${V.producto === 'nuevo' ? 'Vehículo nuevo' : 'Vehículo usado'}</dd>
       <dt>Desgravamen</dt><dd>${esc(desgTxt)}</dd>
       <dt>DIMA</dt><dd>${dima ? esc(dimaTxt) : 'No'}</dd>
     </dl>
@@ -271,7 +294,7 @@ function vehCalc() {
   </details>
   <p class="small muted">Desgravamen y DIMA: tasa anual ÷ 12, aplicada cada mes sobre el saldo capital. Cuota variable estimada con la TRe vigente; puede cambiar cuando el BCB publique una nueva.</p>`;
   $('#vehPlan')?.addEventListener('toggle', e => { V.verPlan = e.target.open; guardarCalc(); });
-  vehCalc.ultimo = { V: { ...V }, monto, c1, cVar, plazo, fijo, tasaVar, desgTxt, dima, primaMSC, aplica };
+  vehCalc.ultimo = { V: { ...V }, monto, c1, cVar, plazo, fijo, tasaVar, desgTxt, dima, primaMSC, aplica, valor, valorUsd, tcVeh };
 }
 
 /* ---------------- Enlace con la app ---------------- */
@@ -281,6 +304,7 @@ ROUTES.calculadora.after = () => {
   const form = $('#vehForm');
   if (!form) return;
   const rerender = ['codeudor', 'plazo'];
+  // (motor, estado y seguro automotor se recalculan sin redibujar)
   const onChange = e => {
     Object.entries(formData(form)).forEach(([k, v]) => { V[k] = v; });
     $$('input[type=checkbox]', form).forEach(ch => { V[ch.name] = ch.checked ? 'si' : ''; });
@@ -302,9 +326,9 @@ ROUTES.calculadora.after = () => {
 Object.assign(ACTIONS, {
   vehCompartir: () => {
     const u = vehCalc.ultimo; if (!u) return;
-    const m = u.V.moneda;
+    const m = 'BOB';
     const text = `*Propuesta de crédito vehicular* (${fmtDate(today())})
-${u.V.nombre ? 'Cliente: ' + u.V.nombre + '\n' : ''}Vehículo ${u.V.producto === 'nuevo' ? 'nuevo' : 'usado'} · valor ${fmt(num(u.V.valor), m)}
+${u.V.nombre ? 'Cliente: ' + u.V.nombre + '\n' : ''}Vehículo ${u.V.estado === 'usado' ? 'usado' : 'nuevo'} (${u.V.motor === 'hibrido' ? 'eléctrico/híbrido' : 'a gasolina'}) · valor $us ${nf2.format(u.valorUsd)} = ${fmt(u.valor, m)} (TC ${nf2.format(u.tcVeh)})
 Monto a financiar: ${fmt(u.monto, m)}
 Plazo: ${u.plazo} meses
 Cuota mensual: *${fmt(u.c1.total, m)}*${u.cVar ? ` (meses 1-${u.fijo}); desde el mes ${u.fijo + 1}: ${fmt(u.cVar.total, m)} aprox.` : ''}
@@ -316,7 +340,7 @@ ${S().settings.ejecutivo || ''} - Banco Mercantil Santa Cruz`;
   },
   vehTramite: () => {
     const u = vehCalc.ultimo; if (!u) return;
-    caseForm({}, { tipo: 'vehicular', monto: Math.round(u.monto * 100) / 100, moneda: u.V.moneda, tasa: num(u.V.tasaFija), plazo: u.plazo, prospecto: u.V.nombre, destino: `Vehículo ${u.V.producto}` });
+    caseForm({}, { tipo: 'vehicular', monto: Math.round(u.monto * 100) / 100, moneda: 'BOB', tasa: num(u.V.tasaFija), plazo: u.plazo, prospecto: u.V.nombre, destino: `Vehículo ${u.V.estado === 'usado' ? 'usado' : 'nuevo'}` });
   }
 });
 

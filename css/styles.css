@@ -473,3 +473,6 @@ tr[data-act] td { cursor: pointer; }
 .chk input:checked + span::before { background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300563F' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5L20 7'/%3E%3C/svg%3E") center/12px no-repeat; border-color: #fff; }
 .chk input:focus-visible + span { outline: 2px solid var(--gold); }
 .chk.off { opacity: .4; pointer-events: none; }
+.veh-valor-bs { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; margin: 2px 0 8px;
+  border-radius: 12px; background: var(--green-50); border: 1px solid var(--green-100); }
+.veh-valor-bs b { font-size: 20px; color: var(--green-700); }
