@@ -21,7 +21,8 @@ const Store = (() => {
     },
     clients: [],
     cases: [],
-    agenda: []
+    agenda: [],
+    sims: []           // simulaciones guardadas (simulador vehicular)
   });
 
   let state = load();
@@ -37,7 +38,8 @@ const Store = (() => {
         settings: { ...base.settings, ...(data.settings || {}) },
         clients: data.clients || [],
         cases: data.cases || [],
-        agenda: data.agenda || []
+        agenda: data.agenda || [],
+        sims: data.sims || []
       };
     } catch (e) {
       console.error('No se pudo leer el almacenamiento', e);
@@ -82,7 +84,7 @@ const Store = (() => {
       state = {
         ...base, ...data,
         settings: { ...base.settings, ...(data.settings || {}), pinHash: state.settings.pinHash },
-        clients: data.clients || [], cases: data.cases || [], agenda: data.agenda || []
+        clients: data.clients || [], cases: data.cases || [], agenda: data.agenda || [], sims: data.sims || []
       };
       save();
       emit(null, 'bulk', null, 'restaurar');
@@ -95,6 +97,23 @@ const Store = (() => {
       save();
     },
     reset() { const pin = state.settings.pinHash; state = empty(); state.settings.pinHash = pin; save(); emit(null, 'bulk', null, 'borrar'); },
+
+    /* ---- Simulaciones guardadas ---- */
+    sim: id => state.sims.find(x => x.id === id),
+    upsertSim(x) {
+      let doc, accion = 'editar';
+      const i = x.id ? state.sims.findIndex(y => y.id === x.id) : -1;
+      if (i >= 0) doc = state.sims[i] = { ...state.sims[i], ...x };
+      else { x.id = x.id || uid(); x.creado = new Date().toISOString(); state.sims.push(x); doc = x; accion = 'crear'; }
+      doc.actualizado = new Date().toISOString();
+      save(); emit('sims', 'set', doc, accion);
+      return doc;
+    },
+    deleteSim(id) {
+      const doc = this.sim(id);
+      state.sims = state.sims.filter(x => x.id !== id);
+      save(); emit('sims', 'delete', doc, 'eliminar');
+    },
 
     /* ---- Clientes ---- */
     client: id => state.clients.find(c => c.id === id),

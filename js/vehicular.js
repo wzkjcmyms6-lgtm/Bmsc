@@ -9,7 +9,7 @@ const VEH = {
   desgravamen: { titular: 1.250, mancomunado: 2.251 }, // % sobre saldo capital
   dima: { titular: 0.36, mancomunado: 0.72 },          // % sobre saldo capital
   periodoSeguros: 12,                          // los % de seguros son anuales → se cobran /12 cada mes
-  msc: { gasolina: 3.8, hibrido: 4.4 },        // % del valor del vehículo, se suma al monto a financiar
+  msc: { gasolina: 3.8, hibrido: 3.8 },        // % del valor del vehículo, se suma al monto a financiar
   plazos: [12, 24, 36, 48, 60, 72, 84, 96, 108, 120],
   // Servicio de deudas: % máximo del sueldo bruto (sumado titular + codeudor)
   codigos: [
@@ -140,7 +140,7 @@ function vehForm() {
       ${field({ label: 'Fecha de nacimiento', name: p ? p + 'Fnac' : 'fnac', type: 'date', value: V[p ? p + 'Fnac' : 'fnac'], required: true })}
     </div>`;
 
-  return `
+  return `${historialSims(V)}
   <form id="vehForm" class="calc-form no-print" onsubmit="return false">
     <div class="veh-top card">
       <div><div class="small muted">Fecha de elaboración de la propuesta</div><b>${fmtDate(today())}</b></div>
@@ -238,6 +238,26 @@ function vehForm() {
     `)}
   </form>
   <div id="vehOut"></div>`;
+}
+
+/* Historial de simulaciones guardadas (arriba del simulador): nombre del titular y monto a financiar */
+function historialSims(V) {
+  const sims = [...(S().sims || [])].sort((a, b) => (b.actualizado || b.creado || '').localeCompare(a.actualizado || a.creado || ''));
+  const abierta = UI.simsAbierto ? 'open' : '';
+  return `
+  <details class="card sims-hist no-print" id="simsHist" ${abierta}>
+    <summary><span>🗂️ Historial de simulaciones</span><span class="badge gray">${sims.length}</span></summary>
+    ${sims.length ? `<div class="sims-lista">${sims.map(x => `
+      <div class="sim-item ${x.id === V.simId ? 'activa' : ''}">
+        <button type="button" class="sim-abrir" data-act="vehSimAbrir" data-id="${esc(x.id)}">
+          <b>${esc(x.nombre || 'Sin nombre')}</b>
+          <span class="num">Bs ${nf2.format(num(x.monto))}${x.cuota ? ` · cuota Bs ${nf2.format(num(x.cuota))}` : ''}</span>
+          <span class="small muted">${fmtDate((x.actualizado || x.creado || '').slice(0, 10))}${x.telefono ? ' · 📞 ' + esc(x.telefono) : ''}${x.plazo ? ' · ' + x.plazo + ' meses' : ''}</span>
+        </button>
+        <button type="button" class="sim-del" data-act="vehSimBorrar" data-id="${esc(x.id)}" aria-label="Eliminar">✕</button>
+      </div>`).join('')}</div>` : '<div class="small muted" style="padding:8px 0 2px">Aún no hay simulaciones guardadas. Registra el teléfono debajo de las cuotas y toca Guardar.</div>'}
+    <button type="button" class="btn sm" data-act="vehSimNueva" style="margin-top:10px">+ Nueva simulación</button>
+  </details>`;
 }
 
 /* Tarjeta de crédito: % según el tramo del límite. Entre tramos se aplica el tramo siguiente. */
@@ -484,6 +504,15 @@ function vehCalc() {
     ${cVar ? `<div class="veh-sep"></div>${filaCuota(cVar, `Meses ${fijo + 1} a ${plazo} · tasa variable (estimada con TRe actual)`)}` : ''}
   </div>
 
+  <div class="card sim-guardar no-print">
+    <label for="simTel"><b>Registrar número de teléfono</b></label>
+    <div class="sim-guardar-row">
+      <input id="simTel" type="tel" inputmode="tel" autocomplete="off" placeholder="7XXXXXXX" value="${esc(V.telefono || '')}">
+      <button type="button" class="btn primary" data-act="vehSimGuardar">${V.simId && S().sims.some(x => x.id === V.simId) ? 'Actualizar' : 'Guardar'}</button>
+    </div>
+    <div class="small muted">Se guarda en el historial de simulaciones con el nombre del titular y el monto.</div>
+  </div>
+
   <div class="card">
     <div class="veh-res-title">Resumen del financiamiento</div>
     <dl class="kv">
@@ -523,6 +552,7 @@ function vehCalc() {
   </details>
   <p class="small muted">Desgravamen y DIMA: tasa anual ÷ 12, aplicada cada mes sobre el saldo capital. Cuota variable estimada con la TRe vigente; puede cambiar cuando el BCB publique una nueva.</p>`;
   $('#vehPlan')?.addEventListener('toggle', e => { V.verPlan = e.target.open; guardarCalc(); });
+  $('#simTel')?.addEventListener('input', e => { V.telefono = e.target.value; guardarCalc(); });
   vehCalc.ultimo = { V: { ...V }, monto, c1, cVar, plazo, fijo, tasaVar, desgTxt, dima, primaMSC, aplica, valor, valorUsd, tcVeh, compra };
 }
 
@@ -532,6 +562,7 @@ ROUTES.calculadora.after = () => {
   const V = vehState();
   const form = $('#vehForm');
   if (!form) return;
+  $('#simsHist')?.addEventListener('toggle', e => { UI.simsAbierto = e.target.open; });
   const rerender = ['codeudor', 'plazo', 'tipoT', 'tipoC', 'vivienda', 'ingC', 'primas'];
   // (motor, estado y seguro automotor se recalculan sin redibujar)
   const onChange = e => {
@@ -564,6 +595,41 @@ Object.assign(ACTIONS, {
     V.ingC = el.dataset.v;
     if (V.ingC === 'si' && V.codeudor !== 'si') { V.codeudor = 'si'; toast('Codeudor activado: completa sus datos en la sección 1'); }
     guardarCalc(); render();
+  },
+  vehSimGuardar: () => {
+    const u = vehCalc.ultimo; if (!u) return;
+    const V = vehState();
+    V.telefono = ($('#simTel')?.value || '').trim();
+    if (!V.telefono) { toast('Ingresa el número de teléfono'); $('#simTel')?.focus(); return; }
+    const existe = V.simId && S().sims.some(x => x.id === V.simId);
+    const { simId, verPlan, plazoAjustado, ...datos } = V;
+    const doc = Store.upsertSim({
+      id: existe ? V.simId : undefined, nombre: V.nombre || '', ci: V.ci || '', ext: V.ext || '', telefono: V.telefono,
+      monto: Math.round(u.monto * 100) / 100, cuota: Math.round(Math.max(u.c1.total, u.cVar ? u.cVar.total : 0) * 100) / 100,
+      plazo: u.plazo, datos: JSON.parse(JSON.stringify(datos))
+    });
+    V.simId = doc.id; guardarCalc();
+    toast(existe ? 'Simulación actualizada' : 'Simulación guardada en el historial');
+    render();
+  },
+  vehSimAbrir: el => {
+    const x = Store.sim(el.dataset.id); if (!x) return;
+    calcState().veh = { ...JSON.parse(JSON.stringify(x.datos || {})), simId: x.id, telefono: x.telefono || '' };
+    UI.simsAbierto = false; guardarCalc(); render();
+    toast(`Simulación de ${x.nombre || 'sin nombre'} cargada`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  },
+  vehSimBorrar: el => {
+    const x = Store.sim(el.dataset.id); if (!x) return;
+    if (!confirm(`¿Eliminar la simulación de ${x.nombre || 'sin nombre'} (Bs ${nf2.format(num(x.monto))})?`)) return;
+    Store.deleteSim(x.id);
+    if (vehState().simId === x.id) { vehState().simId = ''; guardarCalc(); }
+    UI.simsAbierto = true; render();
+  },
+  vehSimNueva: () => {
+    if (!confirm('¿Empezar una simulación nueva? Los datos actuales se borran del formulario (lo guardado en el historial se mantiene).')) return;
+    calcState().veh = null; vehState(); UI.simsAbierto = false; guardarCalc(); render();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   },
   vehUsarMax: el => { vehState().compra = el.dataset.v.replace('.', ','); guardarCalc(); render(); },
   vehDeudaDel: el => { vehState().deudas.splice(+el.dataset.i, 1); guardarCalc(); render(); },

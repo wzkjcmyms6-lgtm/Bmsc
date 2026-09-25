@@ -5,8 +5,14 @@
    - Cada cambio queda registrado en "historial" con una copia del dato en ese momento.
    La configuración del proyecto va en js/firebase-config.js. */
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2';
-const COLS = { clients: 'clientes', cases: 'tramites', agenda: 'agenda' };
-const ETIQUETA = { clients: 'Cliente', cases: 'Trámite', agenda: 'Actividad' };
+const COLS = { clients: 'clientes', cases: 'tramites', agenda: 'agenda', sims: 'simulaciones' };
+const ETIQUETA = { clients: 'Cliente', cases: 'Trámite', agenda: 'Actividad', sims: 'Simulación' };
+// "simulaciones" es nueva: si las reglas de Firestore aún no la permiten, se guarda solo en el
+// dispositivo sin afectar la sincronización de clientes, trámites y agenda.
+const OPCIONAL = 'simulaciones';
+let sinPermisoSims = false;
+const esPermiso = e => e && e.code === 'permission-denied';
+const colsActivas = () => Object.entries(COLS).filter(([, n]) => !(n === OPCIONAL && sinPermisoSims));
 
 let fs = null, db = null, authMod = null, auth = null, listo = false;
 let uidActual = null; // cada ejecutivo tiene su propia cartera: usuarios/{uid}/...
@@ -54,6 +60,7 @@ function resumen(clave, d) {
     const c = d.clientId && Store.client(d.clientId);
     return `${c ? c.nombre : d.prospecto || 'Prospecto'} · ${d.tipo || ''} · ${d.monto || 0} ${d.moneda || ''} · etapa ${d.etapa || ''}`;
   }
+  if (clave === 'sims') return `${d.nombre || 'Sin nombre'} · Bs ${d.monto || 0} · ${d.telefono || ''}`;
   return `${d.titulo || ''} · ${d.fecha || ''}`;
 }
 
@@ -75,6 +82,7 @@ async function registrarHistorial(clave, accion, d) {
 
 async function escribir(ev) {
   if (ev.op === 'bulk') return subirTodo({ reemplazar: true, accion: ev.accion });
+  if (ev.col === 'sims' && sinPermisoSims) return;
   const r = ref(COLS[ev.col], ev.doc.id);
   if (ev.op === 'delete') await fs.deleteDoc(r);
   else await fs.setDoc(r, limpio(ev.doc));
@@ -85,13 +93,15 @@ async function escribir(ev) {
 async function subirTodo({ reemplazar = false, accion = 'sincronizar' } = {}) {
   const st = Store.get();
   let ops = [];
-  for (const [key, nombre] of Object.entries(COLS)) {
+  for (const [key, nombre] of colsActivas()) {
     const locales = new Set(st[key].map(d => d.id));
-    st[key].forEach(d => ops.push(b => b.set(ref(nombre, d.id), limpio(d))));
     if (reemplazar) {
-      const snap = await fs.getDocs(col(nombre));
+      let snap;
+      try { snap = await fs.getDocs(col(nombre)); }
+      catch (e) { if (nombre === OPCIONAL && esPermiso(e)) { sinPermisoSims = true; continue; } throw e; }
       snap.forEach(d => { if (!locales.has(d.id)) ops.push(b => b.delete(d.ref)); });
     }
+    st[key].forEach(d => ops.push(b => b.set(ref(nombre, d.id), limpio(d))));
   }
   // Firestore permite hasta 500 operaciones por lote
   while (ops.length) {
@@ -112,7 +122,9 @@ async function fusionInicial() {
   if (st.settings.nubeFusionada === uidActual) return;
   const ops = [];
   for (const [key, nombre] of Object.entries(COLS)) {
-    const snap = await fs.getDocs(col(nombre));
+    let snap;
+    try { snap = await fs.getDocs(col(nombre)); }
+    catch (e) { if (nombre === OPCIONAL && esPermiso(e)) { sinPermisoSims = true; continue; } throw e; }
     const enNube = new Set(snap.docs.map(d => d.id));
     st[key].filter(d => !enNube.has(d.id)).forEach(d => ops.push(b => b.set(ref(nombre, d.id), limpio(d))));
   }
@@ -140,7 +152,7 @@ function redibujar() {
 function escuchar() {
   desuscribir.forEach(f => f());
   desuscribir = [];
-  for (const [key, nombre] of Object.entries(COLS)) {
+  for (const [key, nombre] of colsActivas()) {
     desuscribir.push(fs.onSnapshot(col(nombre), { includeMetadataChanges: true }, snap => {
       // Solo datos confirmados por el servidor (evita borrar la copia local con una caché vacía)
       if (snap.metadata.fromCache || snap.metadata.hasPendingWrites) {
@@ -149,8 +161,14 @@ function escuchar() {
       }
       if (Nube.estado !== 'conectado') setEstado('conectado');
       const docs = snap.docs.map(d => d.data()).sort((a, b) => (a.creado || '').localeCompare(b.creado || ''));
+      // Simulaciones guardadas solo en el dispositivo (p. ej. antes de actualizar las reglas): se suben, no se pierden
+      if (key === 'sims') {
+        const enNube = new Set(docs.map(d => d.id));
+        const soloLocal = Store.get().sims.filter(d => !enNube.has(d.id));
+        if (soloLocal.length) { soloLocal.forEach(d => fs.setDoc(ref(nombre, d.id), limpio(d)).catch(() => {})); return; }
+      }
       if (Store.applyRemote(key, docs)) redibujar();
-    }, err => setEstado('error', err.code === 'permission-denied' ? 'Sin permiso: revisa las reglas de Firestore' : err.message)));
+    }, err => (nombre === OPCIONAL && esPermiso(err)) ? (sinPermisoSims = true) : setEstado('error', err.code === 'permission-denied' ? 'Sin permiso: revisa las reglas de Firestore' : err.message)));
   }
 }
 
@@ -289,7 +307,10 @@ async function iniciar() {
 Store.subscribe(ev => {
   if (Nube.estado === 'sin-configurar') return;
   if (!listo) { pendientes.push(ev); return; }
-  escribir(ev).catch(e => { console.error('Firestore', e); setEstado('error', e.message); });
+  escribir(ev).catch(e => {
+    if (ev.col === 'sims' && esPermiso(e)) { sinPermisoSims = true; return; }
+    console.error('Firestore', e); setEstado('error', e.message);
+  });
 });
 
 window.addEventListener('online', () => { if (Nube.estado === 'sin-conexion' && listo) setEstado('conectando'); });

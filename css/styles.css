@@ -534,3 +534,20 @@ tr[data-act] td { cursor: pointer; }
 .veh-valor-bs b { white-space: nowrap; }
 .veh-valor-bs .ing-comp { font-size: 12px; display: block; }
 .veh-valor-bs { gap: 12px; }
+
+/* Historial de simulaciones y registro de teléfono */
+.sims-hist summary { display: flex; justify-content: space-between; align-items: center; font-weight: 700; cursor: pointer; list-style: none; }
+.sims-hist summary::-webkit-details-marker { display: none; }
+.sims-hist summary::after { content: '▾'; color: var(--muted); margin-left: 8px; transition: transform .2s; }
+.sims-hist[open] summary::after { transform: rotate(180deg); }
+.sims-hist summary .badge { margin-left: auto; }
+.sims-lista { margin-top: 10px; display: grid; gap: 8px; max-height: 340px; overflow-y: auto; }
+.sim-item { display: flex; align-items: stretch; gap: 6px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
+.sim-item.activa { border-color: var(--green-600); box-shadow: 0 0 0 2px rgba(0,135,90,.15); }
+.sim-abrir { flex: 1; min-width: 0; display: grid; gap: 2px; text-align: left; background: none; border: 0; padding: 10px 12px; color: var(--text); font: inherit; cursor: pointer; }
+.sim-abrir b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sim-abrir .num { color: var(--green-600); font-weight: 650; }
+.sim-del { background: none; border: 0; color: var(--muted); font-size: 16px; padding: 0 12px; cursor: pointer; }
+.sim-guardar { display: grid; gap: 8px; }
+.sim-guardar-row { display: flex; gap: 8px; }
+.sim-guardar-row input { flex: 1; min-width: 0; padding: 11px 12px; border-radius: 11px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font-size: 16px; font-family: inherit; }
