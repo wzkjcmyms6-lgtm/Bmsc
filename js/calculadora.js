@@ -143,14 +143,16 @@ function actualizarCalc() {
 }
 
 /* ================= SIMULADOR ================= */
+const SIM_ACTIVOS = ['vehicular']; // productos visibles en el simulador (por ahora solo vehicular)
 function simForm() {
+  if (!SIM_ACTIVOS.includes(calcState().sim.producto)) calcState().sim = simDefaults(SIM_ACTIVOS[0]);
   const C = calcState().sim;
   const id = C.producto;
   const P = prod(C.esVIS && id === 'vivienda' ? 'vivienda_social' : id);
   const monedas = CATALOG.monedas.map(m => ({ v: m.id, l: m.nombre }));
   const bien = id === 'vivienda' || id === 'vehicular';
   return `
-  <div class="chips no-print">${SIM_PRODUCTOS.map(p => `<button class="chip ${id === p ? 'active' : ''}" data-act="simProducto" data-id="${p}">${tipoInfo(p).icon} ${esc(tipoInfo(p).label)}</button>`).join('')}</div>
+  <div class="chips no-print">${SIM_ACTIVOS.length < 2 ? '' : SIM_ACTIVOS.map(p => `<button class="chip ${id === p ? 'active' : ''}" data-act="simProducto" data-id="${p}">${tipoInfo(p).icon} ${esc(tipoInfo(p).label)}</button>`).join('')}</div>
   <form id="simForm" class="card calc-form no-print" onsubmit="return false">
     <div class="fields-2">
       ${field({ label: 'Moneda', name: 'moneda', type: 'select', value: C.moneda, options: monedas })}

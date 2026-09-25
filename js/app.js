@@ -353,7 +353,7 @@ const ROUTES = {
   'caso': { title: 'Trámite', nav: 'homebase', render: viewCase, back: '#/homebase' },
   'agenda': { title: 'Agenda', nav: 'mas', render: viewAgenda, back: '#/mas' },
   'mas': { title: 'Más', nav: 'mas', render: viewMore },
-  'calculadora': { title: 'Calculadora de créditos', nav: 'calculadora', render: () => '' },
+  'calculadora': { title: 'Simulador vehicular', nav: 'calculadora', render: () => '' },
   'parametros': { title: 'Parámetros de productos', nav: 'mas', render: () => '', back: '#/mas' },
   'ajustes': { title: 'Ajustes', nav: 'mas', render: viewSettings, back: '#/mas' },
   'respaldo': { title: 'Respaldo de datos', nav: 'mas', render: viewBackup, back: '#/mas' },
