@@ -54,7 +54,7 @@ function vehState() {
     desgT: '', desgC: '', dimaT: '', dimaC: '',
     tasaFija: 9, margenVar: 3, plazo: 60, periodoFijo: 24,
     estado: 'nuevo', motor: 'gasolina', valorUsd: 15000, tcVeh: '', msc: 'no',
-    tipoT: 'sueldo', montoT: '', otrosT: '', tipoC: 'sueldo', montoC: '', otrosC: '', vivienda: 'no', aguinaldo: 'no', primas: 'no', primasMonto: '', ingC: 'no', deudas: [], compra: ''
+    tipoT: 'sueldo', montoT: '', otrosT: '', tipoC: 'sueldo', montoC: '', otrosC: '', vivienda: 'no', aguinaldo: 'no', primas: 'no', primasT: '', primasC: '', ingC: 'no', deudas: [], compra: ''
   };
   const V = C.veh;
   if (V.motor !== 'hibrido') V.motor = 'gasolina';
@@ -62,6 +62,7 @@ function vehState() {
   if (V.valorUsd === undefined) V.valorUsd = 15000;
   if (!Array.isArray(V.deudas)) V.deudas = [];
   if (V.brutoT !== undefined) { V.montoT = V.montoT || V.brutoT; V.montoC = V.montoC || V.brutoC; delete V.brutoT; delete V.brutoC; }
+  if (V.primasMonto !== undefined) { V.primasT = V.primasT || V.primasMonto; delete V.primasMonto; }
   V.tipoT = V.tipoT || 'sueldo'; V.tipoC = V.tipoC || 'sueldo';
   return V;
 }
@@ -120,7 +121,8 @@ function ingresosTotales(V) {
   const agui = V.vivienda === 'si' && V.aguinaldo === 'si'
     ? (V.tipoT === 'sueldo' ? num(V.montoT) / 12 : 0) + (c && V.tipoC === 'sueldo' ? num(V.montoC) / 12 : 0) : 0;
   // Primas y bonos: también solo con crédito de vivienda (BMSC u otros bancos); monto anual ÷ 12
-  const primas = V.vivienda === 'si' && V.primas === 'si' ? num(V.primasMonto) / 12 : 0;
+  // Se suman tal cual (sin descuentos), cada persona con su propio monto
+  const primas = V.vivienda === 'si' && V.primas === 'si' ? (num(V.primasT) + (c ? num(V.primasC) : 0)) / 12 : 0;
   const extra = agui + primas;
   return { t, c, agui, primas, computable: t.computable + (c ? c.computable : 0) + extra, liquido: t.liquido + (c ? c.liquido : 0) + extra };
 }
@@ -189,8 +191,11 @@ function vehForm() {
         : `<button type="button" class="btn block veh-add" data-act="vehIngC" data-v="si">+ Añadir ingresos del codeudor (opcional)</button>`}
       <div class="veh-row"><div><span>¿Tiene crédito de vivienda?</span><div class="small muted">En el BMSC o en otros bancos</div></div>${siNo('vivienda', V.vivienda)}</div>
       ${V.vivienda === 'si' ? `<div class="veh-row"><div><span>¿Tomar el aguinaldo?</span><div class="small muted" id="aguiInfo">Un sueldo al año, mensualizado (÷ 12)</div></div>${siNo('aguinaldo', V.aguinaldo)}</div>
-      <div class="veh-row"><div><span>¿Tomar primas y bonos?</span><div class="small muted" id="primasInfo">Monto anual, mensualizado (÷ 12)</div></div>${siNo('primas', V.primas)}</div>
-      ${V.primas === 'si' ? field({ label: 'Primas y bonos del año (Bs)', name: 'primasMonto', type: 'money', value: V.primasMonto, hint: 'Suma anual de primas y bonos (titular y codeudor)' }) : ''}` : ''}
+      <div class="veh-row"><div><span>¿Tomar primas y bonos?</span><div class="small muted" id="primasInfo">Monto anual de cada persona, sin descuentos, ÷ 12</div></div>${siNo('primas', V.primas)}</div>
+      ${V.primas === 'si' ? `<div class="${V.codeudor === 'si' && V.ingC === 'si' ? 'fields-2' : ''}">
+        ${field({ label: 'Titular: primas y bonos del año (Bs)', name: 'primasT', type: 'money', value: V.primasT })}
+        ${V.codeudor === 'si' && V.ingC === 'si' ? field({ label: 'Codeudor: primas y bonos del año (Bs)', name: 'primasC', type: 'money', value: V.primasC }) : ''}
+      </div>` : ''}` : ''}
       <div class="veh-valor-bs"><span class="small muted" id="ingEtiq">Ingreso computable (líquido)</span><b class="num" id="ingTotal">—</b></div>
     `)}
 
@@ -269,7 +274,7 @@ function pintaIngresos(V) {
   const dc = $('#ingDetC'); if (dc && ing.c) dc.textContent = ing.c.detalle;
   const tot = $('#ingTotal'); if (tot) tot.textContent = ing.computable ? `Bs ${nf2.format(ing.computable)}` : '—';
   const et = $('#ingEtiq'); if (et) et.innerHTML = `Ingreso computable<span class="ing-comp">líquido${ing.agui ? ' + aguinaldo ÷ 12' : ''}${ing.primas ? ' + primas y bonos ÷ 12' : ''}</span>`;
-  const pi = $('#primasInfo'); if (pi) pi.textContent = ing.primas ? `Mensualizado: + Bs ${nf2.format(ing.primas)} (monto anual ÷ 12)` : 'Monto anual, mensualizado (÷ 12)';
+  const pi = $('#primasInfo'); if (pi) pi.textContent = ing.primas ? `Mensualizado: + Bs ${nf2.format(ing.primas)} (anual ÷ 12, sin descuentos)` : 'Monto anual de cada persona, sin descuentos, ÷ 12';
   const ai = $('#aguiInfo');
   if (ai) ai.textContent = ing.agui ? `Aguinaldo mensualizado: + Bs ${nf2.format(ing.agui)} (sueldo ÷ 12)` : 'Un sueldo al año, mensualizado (÷ 12) · solo ingresos por sueldo';
   return ing;
