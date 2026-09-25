@@ -87,28 +87,18 @@ function vehForm() {
         <div class="chk-group">${chk('desgT', V.desgT, 'Titular')}${V.codeudor === 'si' ? chk('desgC', V.desgC, 'Codeudor') : ''}</div></div>
       <div class="veh-row veh-seg"><div><span>Seguro DIMA</span><div class="small muted" id="dimaInfo"></div></div>
         <div class="chk-group">${chk('dimaT', V.dimaT, 'Titular')}${V.codeudor === 'si' ? chk('dimaC', V.dimaC, 'Codeudor') : ''}</div></div>
-      <div class="veh-row"><div><span>¿Seguro automotor MSC?</span><div class="small muted">Se suma al monto a financiar</div></div>${siNo('msc', V.msc)}</div>
-      ${V.msc === 'si' ? `<div class="veh-row"><span>Tipo de vehículo</span>${opciones('motor', V.motor, [['normal', `Normal ${nf2.format(VEH.msc.normal)}%`], ['hibrido', `Híbrido / eléctrico ${nf2.format(VEH.msc.hibrido)}%`]])}</div>` : ''}
     `)}
 
     ${seccion(3, 'Condiciones', `
-      <div class="veh-row"><span>Producto</span>${opciones('producto', V.producto, [['nuevo', 'Vehículo nuevo'], ['usado', 'Vehículo usado']])}</div>
-      <div class="fields-2">
-        ${field({ label: 'Moneda', name: 'moneda', type: 'select', value: V.moneda, options: CATALOG.monedas.map(m => ({ v: m.id, l: m.nombre })) })}
-        ${field({ label: 'Valor del vehículo', name: 'valor', type: 'money', value: V.valor })}
-      </div>
-      <div class="fields-2">
-        ${field({ label: 'Aporte propio %', name: 'aportePct', type: 'money', value: V.aportePct })}
-        ${field({ label: 'Plazo (meses)', name: 'plazo', type: 'select', value: V.plazo, options: VEH.plazos.map(n => ({ v: n, l: `${n} meses` })), hint: `<span id="plazoInfo"></span>` })}
-      </div>
       <div class="fields-2">
         ${field({ label: 'Interés fijo % anual', name: 'tasaFija', type: 'money', value: V.tasaFija })}
-        ${field({ label: 'Periodo tasa fija (meses)', name: 'periodoFijo', type: 'number', value: V.periodoFijo, attrs: `inputmode="numeric" min="0" max="${V.plazo}"` })}
+        ${field({ label: 'Interés variable % anual', name: 'margenVar', type: 'money', value: V.margenVar })}
       </div>
       <div class="fields-2">
-        ${field({ label: 'Interés variable % (margen)', name: 'margenVar', type: 'money', value: V.margenVar })}
         <div class="field"><label>TRe MN</label><div class="veh-tre"><b>${nf2.format(treMN())}%</b><span class="small muted">BCB · ${esc(treVigencia())}</span></div></div>
+        ${field({ label: 'Plazo (meses)', name: 'plazo', type: 'select', value: V.plazo, options: VEH.plazos.map(n => ({ v: n, l: `${n} meses` })), hint: `<span id="plazoInfo"></span>` })}
       </div>
+      ${field({ label: 'Plazo tasa fija (meses)', name: 'periodoFijo', type: 'number', value: V.periodoFijo, attrs: `inputmode="numeric" min="0" max="${V.plazo}" step="1"`, hint: 'Solo números enteros, sin superar el plazo' })}
       <div class="small muted" id="tasaVarInfo"></div>
     `)}
   </form>
@@ -153,10 +143,9 @@ function vehCalc() {
   if (dInfo) dInfo.textContent = dima ? dimaTxt : aplica ? `1 persona ${pct3(VEH.dima.titular)}% · 2 personas ${pct3(VEH.dima.mancomunado)}% anual` : 'Solo para quien tiene desgravamen';
 
   // Montos
-  const valor = num(V.valor);
-  const aporte = valor * num(V.aportePct) / 100;
-  const primaMSC = V.msc === 'si' ? valor * VEH.msc[V.motor] / 100 : 0;
-  const monto = valor - aporte + primaMSC;
+  // El monto del crédito se definirá en la próxima sección; por ahora se muestra un resumen de la propuesta
+  const valor = 0, aporte = 0, primaMSC = 0;
+  const monto = num(V.monto);
   // Plazo máximo: el crédito debe terminar antes de que el mayor de los dos pase los 76 años
   const fechas = [V.fnac, conCodeudor ? V.cFnac : null].map(parseDate).filter(Boolean);
   const mayor = fechas.length ? new Date(Math.min(...fechas)) : null;
@@ -194,7 +183,26 @@ function vehCalc() {
   if (mayor && plazoMax < 12) avisos.push(`El mayor de los clientes ya no puede tomar un crédito de al menos 12 meses sin pasar los ${VEH.edadCredito} años.`);
   else if (mayor && V.plazoAjustado && plazo === plazoMax) avisos.push(`Plazo ajustado a ${plazoMax} meses: el crédito no puede pasar de los ${VEH.edadCredito} años del mayor.`);
   if (num(V.periodoFijo) > plazo) avisos.push(`El periodo de tasa fija no puede superar el plazo (${plazo} meses).`);
-  if (!(monto > 0)) { out.innerHTML = '<div class="card empty">Ingresa el valor del vehículo</div>'; return; }
+  if (!(monto > 0)) {
+    out.innerHTML = `
+    ${avisos.length ? `<div class="card veh-avisos">${avisos.map(a => `<div>⚠️ ${esc(a)}</div>`).join('')}</div>` : ''}
+    <div class="card">
+      <div class="veh-res-title">Resumen de la propuesta</div>
+      <dl class="kv">
+        <dt>Fecha</dt><dd>${fmtDate(today())}</dd>
+        <dt>Titular</dt><dd>${esc(V.nombre || '—')}${eT ? ' · ' + edadTxt(eT) : ''}</dd>
+        ${conCodeudor ? `<dt>Codeudor</dt><dd>${esc(V.cNombre || '—')}${eC ? ' · ' + edadTxt(eC) : ''}</dd>` : ''}
+        <dt>Desgravamen</dt><dd>${esc(desgTxt)}</dd>
+        <dt>DIMA</dt><dd>${dima ? esc(dimaTxt) : 'No'}</dd>
+        <dt>Interés fijo</dt><dd>${nf2.format(num(V.tasaFija))}% anual · meses 1 a ${fijo}</dd>
+        ${fijo < plazo ? `<dt>Interés variable</dt><dd>${nf2.format(num(V.margenVar))}% + TRe ${nf2.format(treMN())}% = ${nf2.format(tasaVar)}% · meses ${fijo + 1} a ${plazo}</dd>` : ''}
+        <dt>Plazo</dt><dd>${plazo} meses (${plazo / 12} ${plazo === 12 ? 'año' : 'años'})</dd>
+      </dl>
+    </div>
+    <div class="card empty small">💡 Falta el monto del crédito para calcular la cuota. Se agregará en la siguiente sección.</div>`;
+    vehCalc.ultimo = null;
+    return;
+  }
 
   const segMensual = (desg + dima) / VEH.periodoSeguros; // % mensual sobre saldo
   const plan = generarPlan({ monto, n: plazo, tasa: num(V.tasaFija), sistema: 'frances', gracia: 0, mesesFijos: fijo < plazo ? fijo : 0, tasaVar, desg: segMensual, seguroMes: 0, fecha: today() });
@@ -272,10 +280,14 @@ ROUTES.calculadora.after = () => {
   const V = vehState();
   const form = $('#vehForm');
   if (!form) return;
-  const rerender = ['codeudor', 'msc', 'plazo'];
+  const rerender = ['codeudor', 'plazo'];
   const onChange = e => {
     Object.entries(formData(form)).forEach(([k, v]) => { V[k] = v; });
     $$('input[type=checkbox]', form).forEach(ch => { V[ch.name] = ch.checked ? 'si' : ''; });
+    if (e.target.name === 'periodoFijo') {
+      const entero = String(Math.max(0, parseInt(String(V.periodoFijo), 10) || 0));
+      if (entero !== String(V.periodoFijo)) { V.periodoFijo = entero; e.target.value = entero; }
+    }
     if (e.target.name === 'plazo') { V.plazoAjustado = false; if (num(V.periodoFijo) > num(V.plazo)) V.periodoFijo = V.plazo; }
     guardarCalc();
     if (rerender.includes(e.target.name)) { render(); return; }
