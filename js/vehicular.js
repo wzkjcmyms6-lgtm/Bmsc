@@ -47,7 +47,7 @@ function vehState() {
     desgT: '', desgC: '', dimaT: '', dimaC: '',
     tasaFija: 9, margenVar: 3, plazo: 60, periodoFijo: 24,
     estado: 'nuevo', motor: 'gasolina', valorUsd: 15000, tcVeh: '', msc: 'no',
-    tipoT: 'sueldo', montoT: '', otrosT: '', tipoC: 'sueldo', montoC: '', otrosC: '', deudas: []
+    tipoT: 'sueldo', montoT: '', otrosT: '', tipoC: 'sueldo', montoC: '', otrosC: '', vivienda: 'no', aguinaldo: 'no', deudas: []
   };
   const V = C.veh;
   if (V.motor !== 'hibrido') V.motor = 'gasolina';
@@ -108,7 +108,10 @@ function calcIngreso(tipo, monto, otros) {
 function ingresosTotales(V) {
   const t = calcIngreso(V.tipoT, num(V.montoT), num(V.otrosT));
   const c = V.codeudor === 'si' ? calcIngreso(V.tipoC, num(V.montoC), num(V.otrosC)) : null;
-  return { t, c, computable: t.computable + (c ? c.computable : 0), liquido: t.liquido + (c ? c.liquido : 0) };
+  // Aguinaldo: solo si tiene crédito de vivienda; un sueldo al año ÷ 12 (solo ingresos por sueldo)
+  const agui = V.vivienda === 'si' && V.aguinaldo === 'si'
+    ? (V.tipoT === 'sueldo' ? num(V.montoT) / 12 : 0) + (c && V.tipoC === 'sueldo' ? num(V.montoC) / 12 : 0) : 0;
+  return { t, c, agui, computable: t.computable + (c ? c.computable : 0) + agui, liquido: t.liquido + (c ? c.liquido : 0) + agui };
 }
 
 function vehForm() {
@@ -170,6 +173,8 @@ function vehForm() {
     ${seccion(5, 'Ingresos', `
       ${ingresoPersona(V, 'T', 'Titular')}
       ${V.codeudor === 'si' ? ingresoPersona(V, 'C', 'Codeudor') : ''}
+      <div class="veh-row"><span>¿Tiene crédito de vivienda?</span>${siNo('vivienda', V.vivienda)}</div>
+      ${V.vivienda === 'si' ? `<div class="veh-row"><div><span>¿Tomar el aguinaldo?</span><div class="small muted" id="aguiInfo">Un sueldo al año, mensualizado (÷ 12)</div></div>${siNo('aguinaldo', V.aguinaldo)}</div>` : ''}
       <div class="veh-valor-bs"><span class="small muted">Ingreso computable${V.codeudor === 'si' ? ' sumado' : ''}</span><b class="num" id="ingTotal">—</b></div>
     `)}
 
@@ -208,6 +213,8 @@ function pintaIngresos(V) {
   const d = $('#ingDetT'); if (d) d.textContent = ing.t.detalle;
   const dc = $('#ingDetC'); if (dc && ing.c) dc.textContent = ing.c.detalle;
   const tot = $('#ingTotal'); if (tot) tot.textContent = ing.computable ? `Bs ${nf2.format(ing.computable)}` : '—';
+  const ai = $('#aguiInfo');
+  if (ai) ai.textContent = ing.agui ? `Aguinaldo mensualizado: + Bs ${nf2.format(ing.agui)} (sueldo ÷ 12)` : 'Un sueldo al año, mensualizado (÷ 12) · solo ingresos por sueldo';
   return ing;
 }
 function pintaCapacidad(V, cuotaNueva) {
@@ -423,7 +430,7 @@ ROUTES.calculadora.after = () => {
   const V = vehState();
   const form = $('#vehForm');
   if (!form) return;
-  const rerender = ['codeudor', 'plazo', 'tipoT', 'tipoC'];
+  const rerender = ['codeudor', 'plazo', 'tipoT', 'tipoC', 'vivienda'];
   // (motor, estado y seguro automotor se recalculan sin redibujar)
   const onChange = e => {
     Object.entries(formData(form)).forEach(([k, v]) => {
