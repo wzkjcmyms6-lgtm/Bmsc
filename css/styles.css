@@ -489,3 +489,12 @@ tr[data-act] td { cursor: pointer; }
 .cap-box.no { border-color: var(--red); background: var(--red-soft); }
 .cap-linea { margin-top: 10px; }
 .ing-detalle { padding-bottom: 10px; margin-top: -4px; }
+
+.deuda-item { margin-bottom: 8px; }
+.deuda-item .deuda-row { margin-bottom: 0; }
+.deuda-item.es-tc { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 8px; }
+.deuda-tc { display: grid; grid-template-columns: 1.4fr 1fr; gap: 8px; margin-top: 8px; }
+.deuda-tc select, .deuda-tc input { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); font-size: 15px; font-family: inherit; min-width: 0; }
+.deuda-tc-info { grid-column: 1 / -1; }
+.deuda-calc { padding: 10px; border-radius: 10px; border: 1px dashed var(--border); font-weight: 700; color: var(--green-700); background: var(--surface); }

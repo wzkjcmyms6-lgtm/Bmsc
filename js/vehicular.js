@@ -19,6 +19,13 @@ const VEH = {
     { v: 'H3', l: 'H3 · Vivienda social', g: 'social' }, { v: 'H4', l: 'H4 · Vivienda social', g: 'social' }
   ],
   limite: { consumo: 25, vivienda: 40, social: 37 },
+  // Tarjetas de crédito: cuota a considerar = % del límite según tramo
+  tarjetas: [['visa', 'Visa Internacional'], ['master', 'Mastercard Clásica']],
+  tramosTC: [
+    { desde: 2100, hasta: 2330, pct: 10 }, { desde: 2340, hasta: 2870, pct: 9 }, { desde: 2880, hasta: 3720, pct: 8 },
+    { desde: 3730, hasta: 5290, pct: 7 }, { desde: 5300, hasta: 9150, pct: 6 }, { desde: 9160, hasta: 33900, pct: 5 },
+    { desde: 40000, hasta: Infinity, pct: 4 }
+  ],
   impuestoExterior: 13,                        // % que se descuenta a ingresos del exterior (referencial)  // vivienda y social incluyen el 25% de consumo
   treMN: 3.65, treVigencia: 'septiembre 2026'  // TRe MN publicada por el BCB (respaldo)
 };
@@ -181,12 +188,24 @@ function vehForm() {
     ${seccion(6, 'Servicio de deudas mensual', `
       <div class="deudas-head small muted"><span>Código</span><span>Cuota mensual (Bs)</span><span></span></div>
       <div id="deudas">${V.deudas.map((d, i) => `
-        <div class="deuda-row">
-          <select name="d_${i}_cod">${VEH.codigos.map(c => `<option value="${c.v}" ${d.cod === c.v ? 'selected' : ''}>${esc(c.l)}</option>`).join('')}</select>
-          <input name="d_${i}_cuota" type="text" inputmode="decimal" placeholder="0,00" value="${esc(d.cuota || '')}">
-          <button type="button" class="icon-btn deuda-del" data-act="vehDeudaDel" data-i="${i}" aria-label="Quitar">${ICONS.x}</button>
+        <div class="deuda-item ${d.cod === 'TC' ? 'es-tc' : ''}">
+          <div class="deuda-row">
+            <select name="d_${i}_cod">${VEH.codigos.map(c => `<option value="${c.v}" ${d.cod === c.v ? 'selected' : ''}>${esc(c.l)}</option>`).join('')}</select>
+            ${d.cod === 'TC'
+              ? `<div class="deuda-calc num" id="tcCuota_${i}">—</div>`
+              : `<input name="d_${i}_cuota" type="text" inputmode="decimal" placeholder="0,00" value="${esc(d.cuota || '')}">`}
+            <button type="button" class="icon-btn deuda-del" data-act="vehDeudaDel" data-i="${i}" aria-label="Quitar">${ICONS.x}</button>
+          </div>
+          ${d.cod === 'TC' ? `<div class="deuda-tc">
+            <select name="d_${i}_tarjeta">${VEH.tarjetas.map(([v, l]) => `<option value="${v}" ${(d.tarjeta || 'visa') === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+            <input name="d_${i}_limite" type="text" inputmode="decimal" placeholder="Límite de la tarjeta (Bs)" value="${esc(d.limite || '')}">
+            <div class="small muted deuda-tc-info" id="tcInfo_${i}"></div>
+          </div>` : ''}
         </div>`).join('') || '<div class="small muted" style="padding:6px 0">Sin deudas registradas.</div>'}</div>
       <button type="button" class="btn sm" data-act="vehDeudaAdd" style="margin-top:8px">${ICONS.plus} Agregar deuda</button>
+      <details class="small muted" style="margin-top:10px"><summary class="link" style="cursor:pointer">Cuota a considerar en tarjetas (% del límite)</summary>
+        <table class="tbl num" style="margin-top:6px"><tbody>${VEH.tramosTC.map(t => `<tr><td>Bs ${nf0.format(t.desde)} ${t.hasta === Infinity ? 'en adelante' : 'a ' + nf0.format(t.hasta)}</td><td>${t.pct}%</td></tr>`).join('')}</tbody></table>
+      </details>
       <div class="small muted" style="margin-top:10px">TC y N: hasta ${VEH.limite.consumo}% del ingreso computable (líquido) · con H0–H2 el total hasta ${VEH.limite.vivienda}% · con H3–H4 hasta ${VEH.limite.social}% (incluyen el ${VEH.limite.consumo}%).</div>
       <div id="capBox"></div>
     `)}
@@ -194,11 +213,25 @@ function vehForm() {
   <div id="vehOut"></div>`;
 }
 
+/* Tarjeta de crédito: % según el tramo del límite. Entre tramos se aplica el tramo siguiente. */
+function tramoTC(limite) {
+  if (!(limite > 0)) return null;
+  const t = VEH.tramosTC.find(x => limite <= x.hasta) || VEH.tramosTC.at(-1);
+  const exacto = limite >= t.desde;
+  const bajoMinimo = limite < VEH.tramosTC[0].desde;
+  return { ...t, exacto, bajoMinimo };
+}
+const cuotaDeuda = d => {
+  if (d.cod !== 'TC') return num(d.cuota);
+  const t = tramoTC(num(d.limite));
+  return t ? num(d.limite) * t.pct / 100 : 0;
+};
+
 /* Capacidad de pago según el servicio de deudas */
 function capacidadDeudas(V, cuotaNueva) {
   const bruto = ingresosTotales(V).computable;
   const grupo = cod => (VEH.codigos.find(c => c.v === cod) || VEH.codigos[1]).g;
-  const suma = g => V.deudas.filter(d => grupo(d.cod) === g).reduce((a, d) => a + num(d.cuota), 0);
+  const suma = g => V.deudas.filter(d => grupo(d.cod) === g).reduce((a, d) => a + cuotaDeuda(d), 0);
   const cons = suma('consumo'), viv = suma('vivienda'), soc = suma('social');
   const limTotal = soc ? VEH.limite.social : viv ? VEH.limite.vivienda : VEH.limite.consumo;
   const consNuevo = cons + cuotaNueva;
@@ -218,8 +251,19 @@ function pintaIngresos(V) {
   if (ai) ai.textContent = ing.agui ? `Aguinaldo mensualizado: + Bs ${nf2.format(ing.agui)} (sueldo ÷ 12)` : 'Un sueldo al año, mensualizado (÷ 12) · solo ingresos por sueldo';
   return ing;
 }
+function pintaTarjetas(V) {
+  V.deudas.forEach((d, i) => {
+    if (d.cod !== 'TC') return;
+    const t = tramoTC(num(d.limite));
+    const c = $('#tcCuota_' + i), info = $('#tcInfo_' + i);
+    if (c) c.textContent = t ? `Bs ${nf2.format(cuotaDeuda(d))}` : '—';
+    if (info) info.innerHTML = !t ? 'Ingresa el límite para calcular la cuota'
+      : `Límite Bs ${nf2.format(num(d.limite))} × ${t.pct}% = Bs ${nf2.format(cuotaDeuda(d))}${t.bajoMinimo ? ` · <span style="color:var(--red)">límite menor al mínimo de Bs ${nf0.format(VEH.tramosTC[0].desde)}</span>` : !t.exacto ? ' · entre tramos: se aplica el siguiente' : ''}`;
+  });
+}
 function pintaCapacidad(V, cuotaNueva) {
   pintaIngresos(V);
+  pintaTarjetas(V);
   const box = $('#capBox');
   if (!box) return null;
   const k = capacidadDeudas(V, cuotaNueva);
@@ -435,7 +479,7 @@ ROUTES.calculadora.after = () => {
   // (motor, estado y seguro automotor se recalculan sin redibujar)
   const onChange = e => {
     Object.entries(formData(form)).forEach(([k, v]) => {
-      const m = k.match(/^d_(\d+)_(cod|cuota)$/);
+      const m = k.match(/^d_(\d+)_(cod|cuota|tarjeta|limite)$/);
       if (m) { const d = V.deudas[+m[1]]; if (d) d[m[2]] = v; }
       else V[k] = v;
     });
@@ -446,7 +490,7 @@ ROUTES.calculadora.after = () => {
     }
     if (e.target.name === 'plazo') { V.plazoAjustado = false; if (num(V.periodoFijo) > num(V.plazo)) V.periodoFijo = V.plazo; }
     guardarCalc();
-    if (rerender.includes(e.target.name)) { render(); return; }
+    if (rerender.includes(e.target.name) || /^d_\d+_cod$/.test(e.target.name)) { render(); return; }
     vehCalc();
   };
   const esCambio = t => t.tagName === 'SELECT' || t.type === 'radio' || t.type === 'checkbox' || t.type === 'date';
