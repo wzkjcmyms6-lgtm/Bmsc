@@ -694,7 +694,7 @@ function vehCalc() {
   ${m === 'USD' ? `<div class="card small">Equivalente de la primera cuota: <b>Bs ${nf2.format(c1.total * tc())}</b> al tipo de cambio oficial Bs ${nf2.format(tc())}.</div>` : ''}
 
   <div class="btn-row no-print" style="margin:10px 0">
-    <button class="btn sm" data-act="vehCompartir">${ICONS.wa} Compartir</button>
+    <button class="btn sm" data-act="vehCompartir" id="btnWa">${ICONS.wa} ${V.telefono ? 'WhatsApp al cliente' : 'Compartir'}</button>
     <button class="btn sm" data-act="vehTramite">${ICONS.folder} Crear trámite</button>
     ${consumo ? `<button class="btn sm primary" data-act="vehPDF">📄 Generar PDF</button>` : `<button class="btn sm" onclick="window.print()">🖨️ PDF</button>`}
   </div>
@@ -711,7 +711,10 @@ function vehCalc() {
   </details>
   <p class="small muted">${consumo ? 'Desgravamen, DIMA y cesantía' : 'Desgravamen y DIMA'}: tasa anual ÷ 12, aplicada cada mes sobre el saldo capital. Cuota variable estimada con la TRe vigente; puede cambiar cuando el BCB publique una nueva.</p>`;
   $('#vehPlan')?.addEventListener('toggle', e => { V.verPlan = e.target.open; guardarCalc(); });
-  $('#simTel')?.addEventListener('input', e => { V.telefono = e.target.value; guardarCalc(); });
+  $('#simTel')?.addEventListener('input', e => {
+    V.telefono = e.target.value; guardarCalc();
+    const bw = $('#btnWa'); if (bw) bw.lastChild.textContent = ' ' + (V.telefono.trim() ? 'WhatsApp al cliente' : 'Compartir');
+  });
   vehCalc.ultimo = { V: { ...V }, monto, c1, cVar, plazo, fijo, tasaVar, desgTxt, dima, dimaTxt, ces, cesTxt, consumo, primaMSC, aplica, valor, valorUsd, tcVeh, compra,
     eT, eC, teac, totales: plan.totales,
     desglose: x => ({ capInt: x.cuota, desg: desg ? parte(x, desg) : 0, dima: dima ? parte(x, dima) : 0, ces: ces ? parte(x, ces) : 0 }) };
@@ -810,7 +813,10 @@ Cuota mensual: *${fmt(u.c1.total, m)}*${u.cVar ? ` (meses 1-${u.fijo}); desde el
 ${u.aplica ? `Incluye desgravamen${u.dima ? ' y DIMA' : ''}` : 'Sin desgravamen'}${u.ces ? '; seguro de cesantía' : ''}${u.primaMSC ? '; seguro automotor financiado' : ''}.
 Sujeto a evaluación y aprobación.
 ${S().settings.ejecutivo || ''} - Banco Mercantil Santa Cruz`;
-    if (navigator.share) navigator.share({ text }).catch(() => {});
+    // Con el teléfono registrado se abre directamente el chat de WhatsApp del cliente
+    const tel = ($('#simTel')?.value || vehState().telefono || '').trim();
+    if (phoneDigits(tel).length >= 8) window.open(waLink(tel, text), '_blank');
+    else if (navigator.share) navigator.share({ text }).catch(() => {});
     else window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
   },
   vehTramite: () => {

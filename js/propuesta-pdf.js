@@ -111,8 +111,9 @@ function generarPropuestaPDF(u) {
   const pie = doc.splitTextToSize('Cálculos referenciales, sujetos a evaluación y aprobación del banco. La cuota con tasa variable es estimada con la TRe vigente y puede cambiar. Los seguros se calculan cada mes sobre el saldo del capital.', ancho);
   doc.text(pie, M, 297 - 14 - (pie.length - 1) * 3.8);
 
-  const limpio = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w\- ]+/g, '').trim();
-  const nombre = `Propuesta consumo${V.nombre ? ' - ' + limpio(V.nombre) : ''} - ${today()}.pdf`;
+  // Nombre del archivo: "Propuesta Crédito Consumo - Nombre del Cliente.pdf" (sin caracteres no válidos en archivos)
+  const limpio = t => String(t || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const nombre = `Propuesta Crédito Consumo${limpio(V.nombre) ? ' - ' + limpio(V.nombre) : ''}.pdf`;
   return { doc, nombre };
 }
 
@@ -128,7 +129,8 @@ async function compartirPropuestaPDF(u) {
   }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
+  // Algunos navegadores no aceptan tildes en descargas: se usa la versión sin tildes
+  a.href = url; a.download = nombre.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 30000);
   toast('PDF generado');
 }
