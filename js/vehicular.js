@@ -908,7 +908,7 @@ function compartirTarjeta(u) {
   const tel = ($('#simTel')?.value || vehState().telefono || '').trim();
   if (phoneDigits(tel).length >= 8) window.open(waLink(tel, text), '_blank');
   else if (navigator.share) navigator.share({ text }).catch(() => {});
-  else window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+  else window.open(waLink('', text), '_blank');
 }
 
 /* ---------------- Enlace con la app ---------------- */
@@ -1003,7 +1003,7 @@ Object.assign(ACTIONS, {
     const tel = ($('#simTel')?.value || vehState().telefono || '').trim();
     if (phoneDigits(tel).length >= 8) window.open(waLink(tel, text), '_blank');
     else if (navigator.share) navigator.share({ text }).catch(() => {});
-    else window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+    else window.open(waLink('', text), '_blank');
   },
   vehTramite: () => {
     const u = vehCalc.ultimo; if (!u) return;

@@ -618,7 +618,7 @@ Total intereses: ${fmt(u.plan.totales.interes, m)}
 ${m === 'USD' ? `Equivalente: Bs ${nf2.format(u.primera.total * tc())} al TC ${nf2.format(tc())}\n` : ''}Sujeto a evaluación y aprobación.
 ${S().settings.ejecutivo || ''} - Banco Mercantil Santa Cruz`;
     if (navigator.share) navigator.share({ text }).catch(() => {});
-    else window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+    else window.open(waLink('', text), '_blank');
   },
   simTramite: () => {
     const u = simCalc.ultimo; if (!u) return;

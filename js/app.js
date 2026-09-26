@@ -134,7 +134,12 @@ function phoneDigits(p) {
   if (d.length === 8) d = '591' + d; // celular boliviano
   return d;
 }
-const waLink = (phone, text = '') => `https://wa.me/${phoneDigits(phone)}${text ? '?text=' + encodeURIComponent(text) : ''}`;
+// Enlace de WhatsApp. Se usa api.whatsapp.com/send (no wa.me): la redirección de wa.me
+// daña los emojis en el iPhone y llegan como "�".
+const waLink = (phone, text = '') => {
+  const q = [phone ? 'phone=' + phoneDigits(phone) : '', text ? 'text=' + encodeURIComponent(text) : ''].filter(Boolean).join('&');
+  return 'https://api.whatsapp.com/send' + (q ? '?' + q : '');
+};
 
 /* =========================================================
    Cálculos de cartera
@@ -1815,7 +1820,7 @@ const ACTIONS = {
     const t = tipoInfo(el.dataset.tipo);
     const text = `Requisitos para crédito ${t.label} - Banco Mercantil Santa Cruz:\n\n${GUIDES[t.id].requisitos.map(r => '• ' + r).join('\n')}\n\n${S().settings.ejecutivo || ''}`;
     if (navigator.share) navigator.share({ text }).catch(() => {});
-    else window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+    else window.open(waLink('', text), '_blank');
   },
 
   newEvent: el => eventForm({}, { clientId: el.dataset.client || '' }),
