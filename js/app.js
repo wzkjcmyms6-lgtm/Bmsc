@@ -1382,7 +1382,12 @@ function viewSettings() {
     </div>
     <div class="section-title">Parámetros</div>
     <div class="card">
-      ${field({ label: 'Tema', name: 'theme', type: 'select', value: st.theme, options: [{ v: 'auto', l: 'Automático' }, { v: 'light', l: 'Claro' }, { v: 'dark', l: 'Oscuro' }] })}
+      <div class="veh-row" style="border:0;padding:0"><span>Tema</span>
+        <div class="seg-toggle" role="radiogroup" id="temaToggle">
+          ${[['light', '☀️ Claro'], ['dark', '🌙 Oscuro']].map(([v, l]) => `<label><input type="radio" name="theme" value="${v}" ${temaActual() === v ? 'checked' : ''}><span>${l}</span></label>`).join('')}
+        </div>
+      </div>
+      <div class="small muted" style="margin-top:6px">Se aplica al instante y queda guardado en este dispositivo.</div>
     </div>
     <button class="btn primary block" type="submit">Guardar ajustes</button>
   </form>`;
@@ -1393,6 +1398,8 @@ ROUTES.ajustes.after = () => {
     $('#tcAutoWrap').classList.toggle('hidden', f.tcModo.value === 'manual');
     $('#tcManualWrap').classList.toggle('hidden', f.tcModo.value !== 'manual');
   });
+  // Tema: se aplica y guarda al tocarlo, sin esperar "Guardar ajustes"
+  $$('#temaToggle input').forEach(r => r.addEventListener('change', () => { S().settings.theme = r.value; Store.save(); applyTheme(); }));
   f.addEventListener('submit', ev => {
     ev.preventDefault();
     const d = formData(ev.target);
@@ -1400,16 +1407,24 @@ ROUTES.ajustes.after = () => {
       ejecutivo: d.ejecutivo.trim(), agencia: d.agencia.trim(),
       metaMensual: num(d.metaMensual), metaClientes: parseInt(d.metaClientes, 10) || 0,
       tcModo: d.tcModo === 'manual' && num(d.tc) ? 'manual' : 'auto', tcTipo: d.tcTipo || 'tco', tc: num(d.tc) || '',
-      theme: d.theme
+      theme: d.theme || S().settings.theme
     });
     Store.save(); applyTheme(); toast('Ajustes guardados'); location.hash = '#/';
   });
 };
 
+// Tema actual: claro u oscuro ('auto' sigue al celular hasta que el usuario elija uno)
+function temaActual() {
+  const t = S().settings.theme;
+  if (t === 'light' || t === 'dark') return t;
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
 function applyTheme() {
   const t = S().settings.theme;
-  if (t === 'auto') document.documentElement.removeAttribute('data-theme');
-  else document.documentElement.setAttribute('data-theme', t);
+  if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+  else document.documentElement.removeAttribute('data-theme');
+  // Barra del navegador del mismo color que el tema
+  document.querySelector('meta[name=theme-color]')?.setAttribute('content', temaActual() === 'dark' ? '#0C1612' : '#00563F');
 }
 
 /* =========================================================
