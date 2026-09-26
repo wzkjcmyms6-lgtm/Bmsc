@@ -696,8 +696,10 @@ function vehCalc() {
   <div class="btn-row no-print" style="margin:10px 0">
     <button class="btn sm" data-act="vehCompartir">${ICONS.wa} Compartir</button>
     <button class="btn sm" data-act="vehTramite">${ICONS.folder} Crear trámite</button>
-    <button class="btn sm" onclick="window.print()">🖨️ PDF</button>
+    ${consumo ? `<button class="btn sm primary" data-act="vehPDF">📄 Generar PDF</button>` : `<button class="btn sm" onclick="window.print()">🖨️ PDF</button>`}
   </div>
+  ${consumo ? `<div class="veh-row no-print pdf-boletas"><div><span>Boletas de pago a solicitar</span><div class="small muted">Para los requisitos del PDF · explica al cliente según el caso</div></div>
+    <div class="seg-toggle">${['3', '6'].map(n => `<label><input type="radio" name="boletasPdf" value="${n}" ${(V.boletas === '6' ? '6' : '3') === n ? 'checked' : ''} data-act="vehBoletas"><span>${n}</span></label>`).join('')}</div></div>` : ''}
 
   <details class="card tight plan" ${V.verPlan ? 'open' : ''} id="vehPlan">
     <summary style="padding:14px;cursor:pointer;font-weight:700">📅 Plan de pagos (${plazo} cuotas)</summary>
@@ -710,7 +712,10 @@ function vehCalc() {
   <p class="small muted">${consumo ? 'Desgravamen, DIMA y cesantía' : 'Desgravamen y DIMA'}: tasa anual ÷ 12, aplicada cada mes sobre el saldo capital. Cuota variable estimada con la TRe vigente; puede cambiar cuando el BCB publique una nueva.</p>`;
   $('#vehPlan')?.addEventListener('toggle', e => { V.verPlan = e.target.open; guardarCalc(); });
   $('#simTel')?.addEventListener('input', e => { V.telefono = e.target.value; guardarCalc(); });
-  vehCalc.ultimo = { V: { ...V }, monto, c1, cVar, plazo, fijo, tasaVar, desgTxt, dima, ces, consumo, primaMSC, aplica, valor, valorUsd, tcVeh, compra };
+  vehCalc.ultimo = { V: { ...V }, monto, c1, cVar, plazo, fijo, tasaVar, desgTxt, dima, dimaTxt, ces, cesTxt, consumo, primaMSC, aplica, valor, valorUsd, tcVeh, compra,
+    eT, eC, teac, totales: plan.totales,
+    desglose: x => ({ capInt: x.cuota, desg: desg ? parte(x, desg) : 0, dima: dima ? parte(x, dima) : 0, ces: ces ? parte(x, ces) : 0 }) };
+  if (consumo && typeof cargarJsPDF === 'function') cargarJsPDF().catch(() => {}); // se deja listo para que el PDF salga al instante
 }
 
 /* ---------------- Enlace con la app ---------------- */
@@ -791,6 +796,8 @@ Object.assign(ACTIONS, {
     calcState().veh = null; vehState().producto = producto; UI.simsAbierto = false; guardarCalc(); render();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   },
+  vehPDF: () => { const u = vehCalc.ultimo; if (u) compartirPropuestaPDF({ ...u, V: { ...u.V, boletas: vehState().boletas } }); },
+  vehBoletas: el => { vehState().boletas = el.value; guardarCalc(); },
   vehUsarMax: el => { const V = vehState(); V[esConsumo(V) ? 'montoCons' : 'compra'] = el.dataset.v.replace('.', ','); guardarCalc(); render(); },
   vehDeudaDel: el => { vehState().deudas.splice(+el.dataset.i, 1); guardarCalc(); render(); },
   vehCompartir: () => {
