@@ -617,13 +617,16 @@ function vehCalc() {
   const cuotaMaxDe = pl => Math.max(pl.rows[0].total, fijo < plazo ? pl.rows[fijo].total : 0);
   const base = 100000, cuotaBase = cuotaMaxDe(planDe(base));
   const kMax = capacidadDeudas(V, 0);
-  const montoMax = kMax.mensual && cuotaBase > 0 ? Math.floor(kMax.maxNueva / cuotaBase * base * 100) / 100 : 0;
+  const montoExacto = kMax.mensual && cuotaBase > 0 ? Math.floor(kMax.maxNueva / cuotaBase * base * 100) / 100 : 0;
+  // Consumo: como el CEM del banco, el monto máximo se redondea hacia abajo a miles
+  const montoMax = consumo ? Math.floor(montoExacto / 1000) * 1000 : montoExacto;
   const compraMax = Math.max(0, montoMax - primaMSC);
   const fm = $('#finMax');
   if (fm) fm.innerHTML = !kMax.mensual
     ? `<div class="fin-max vacio small">Ingresa los ingresos (sección ${SEC(V).ingresos}) para calcular el monto máximo a financiar.</div>`
     : `<div class="fin-max ${compra > compraMax + 0.005 ? 'excede' : ''}">
         <div class="row between"><span>Monto máximo ${consumo ? 'del crédito' : 'a financiar'}</span><b class="num">Bs ${nf2.format(montoMax)}</b></div>
+        ${consumo && montoExacto > montoMax ? `<div class="small muted">Redondeado a miles, como el CEM (cálculo exacto: Bs ${nf2.format(montoExacto)})</div>` : ''}
         <div class="small muted">Cuota máxima Bs ${nf2.format(kMax.maxNueva)} (capacidad de pago${kMax.conVivienda && kMax.limitaVivienda ? ', limitada por el total con vivienda' : ''}${kMax.sinNorma ? ', sin evaluar el límite con vivienda' : ''}) · ${plazo} meses · ${nf2.format(num(V.tasaFija))}%${fijo < plazo ? ` / ${nf2.format(tasaVar)}%` : ''}${desg || ces ? ' · con seguros' : ''}</div>
         ${consumo ? '' : `${primaMSC ? `<div class="small muted">− Seguro vehicular BMSC Bs ${nf2.format(primaMSC)}</div>` : ''}
         <div class="row between fin-max-compra"><span>Compra máxima de vehículo</span><b class="num">Bs ${nf2.format(compraMax)}</b></div>
