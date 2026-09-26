@@ -1,0 +1,64 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Administrador de la app: carga las normas y aprueba a los ejecutivos que se registran
+    function esAdmin() {
+      return request.auth != null && request.auth.token.email == '17751@mi-cartera-bmsc.app';
+    }
+    // Ejecutivo aprobado por el administrador (o el administrador)
+    function aprobado() {
+      return request.auth != null
+        && (esAdmin() || exists(/databases/$(database)/documents/aprobados/$(request.auth.uid)));
+    }
+
+    // Rol asignado por el administrador: ejecutivo, gerente (con su equipo) o capacitador
+    function acceso() {
+      return get(/databases/$(database)/documents/aprobados/$(request.auth.uid)).data;
+    }
+    // Quién puede VER la cartera de otro ejecutivo (nadie puede modificarla):
+    // el administrador, el capacitador comercial y el gerente de agencia (solo su equipo)
+    function supervisa(uid) {
+      return request.auth != null && (esAdmin()
+        || (exists(/databases/$(database)/documents/aprobados/$(request.auth.uid))
+            && (acceso().rol == 'capacitador'
+                || (acceso().rol == 'gerente' && uid in acceso().equipo))));
+    }
+
+    // Cada ejecutivo lee y escribe su propia cartera: usuarios/{su uid}/...
+    match /usuarios/{uid}/{coleccion}/{id} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == uid
+        && coleccion in ['clientes', 'tramites', 'agenda', 'historial', 'simulaciones', 'perfil'];
+      allow read: if supervisa(uid) && coleccion in ['clientes', 'tramites', 'simulaciones', 'perfil'];
+    }
+    // Normas internas: solo ejecutivos aprobados las leen; solo el administrador las cambia
+    match /config/{doc} {
+      allow read: if aprobado();
+      allow write: if esAdmin();
+    }
+    // Directorio: lo ven los aprobados; cada uno edita solo su ficha
+    match /directorio/{uid} {
+      allow read: if aprobado() || (request.auth != null && request.auth.uid == uid);
+      allow write: if request.auth != null && request.auth.uid == uid;
+      allow delete: if esAdmin();
+    }
+    // Solicitudes de acceso: el ejecutivo crea la suya (pendiente); el administrador las revisa
+    match /solicitudes/{uid} {
+      allow read: if esAdmin() || (request.auth != null && request.auth.uid == uid);
+      allow create: if request.auth != null && request.auth.uid == uid && request.resource.data.estado == 'pendiente';
+      allow update, delete: if esAdmin();
+    }
+    // Aprobados: solo el administrador los escribe
+    match /aprobados/{uid} {
+      allow read: if esAdmin() || (request.auth != null && request.auth.uid == uid);
+      allow write: if esAdmin();
+    }
+    // Cartera compartida anterior: solo el usuario 17751 puede leerla y borrarla,
+    // para que la app la mueva a su cartera. Se puede quitar cuando esté vacía.
+    match /{coleccion}/{id} {
+      allow read, delete: if request.auth != null
+        && request.auth.token.email == '17751@mi-cartera-bmsc.app'
+        && coleccion in ['clientes', 'tramites', 'agenda', 'historial'];
+    }
+  }
+}

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#00563F">
+  <meta name="description" content="Herramienta para ejecutivos de cuenta: cartera de clientes, créditos, Home Base de trámites, agenda y calculadoras.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Mi Cartera">
+  <title>Mi Cartera · Ejecutivo BMSC</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <!-- Inicio de sesión (Firebase Authentication) -->
+  <div id="login" class="lock login hidden" aria-live="polite">
+    <form id="loginForm" class="lock-box" autocomplete="on">
+      <img class="logo-big" src="icons/icon.svg" alt="Mi Cartera">
+      <h1>Mi Cartera</h1>
+      <p class="muted">Ejecutivo de cuenta · BMSC</p>
+      <div class="field" style="text-align:left">
+        <label for="loginUser">Usuario</label>
+        <input id="loginUser" name="username" inputmode="numeric" autocomplete="username" required>
+      </div>
+      <div class="field" style="text-align:left">
+        <label for="loginPass">Clave</label>
+        <input id="loginPass" name="password" type="password" inputmode="numeric" autocomplete="current-password" required>
+      </div>
+      <button id="loginBtn" class="btn primary block" type="submit">Ingresar</button>
+      <p id="loginErr" class="error-text"></p>
+      <p class="small muted" style="margin:6px 0 0">¿Eres ejecutivo y no tienes cuenta? <a href="#" class="link" id="irRegistro">Crear cuenta</a></p>
+      <p class="autor">Creado por Juan Manuel Llorenti</p>
+    </form>
+    <!-- Registro: el ejecutivo crea su usuario y queda pendiente de aprobación del administrador -->
+    <form id="registroForm" class="lock-box hidden" autocomplete="on">
+      <img class="logo-big" src="icons/icon.svg" alt="Mi Cartera">
+      <h1>Crear cuenta</h1>
+      <p class="muted">El administrador aprobará tu acceso</p>
+      <div class="field" style="text-align:left">
+        <label for="regUser">Usuario (tu código de ejecutivo)</label>
+        <input id="regUser" name="username" inputmode="numeric" autocomplete="username" required placeholder="Ej. 17752">
+      </div>
+      <div class="field" style="text-align:left">
+        <label for="regRol">Rol</label>
+        <select id="regRol">
+          <option value="ejecutivo">Ejecutivo de cuenta</option>
+          <option value="gerente">Gerente de agencia</option>
+          <option value="capacitador">Capacitador comercial</option>
+        </select>
+      </div>
+      <div class="field" style="text-align:left">
+        <label for="regNombre">Nombre completo</label>
+        <input id="regNombre" autocomplete="name" required>
+      </div>
+      <div class="field" style="text-align:left" id="regAgenciaBox">
+        <label for="regAgencia">Sucursal</label>
+        <select id="regAgencia" required></select>
+      </div>
+      <div class="field" style="text-align:left">
+        <label for="regTel">Número de celular</label>
+        <input id="regTel" type="tel" inputmode="tel" autocomplete="tel" required placeholder="7XXXXXXX">
+      </div>
+      <div class="field" style="text-align:left">
+        <label for="regPass">Clave (mínimo 6 caracteres)</label>
+        <input id="regPass" type="password" autocomplete="new-password" minlength="6" required>
+      </div>
+      <div class="field" style="text-align:left">
+        <label for="regPass2">Repite la clave</label>
+        <input id="regPass2" type="password" autocomplete="new-password" minlength="6" required>
+      </div>
+      <button id="regBtn" class="btn primary block" type="submit">Crear cuenta</button>
+      <p id="regErr" class="error-text"></p>
+      <p class="small muted" style="margin:6px 0 0"><a href="#" class="link" id="irLogin">Ya tengo cuenta: ingresar</a></p>
+    </form>
+  </div>
+
+  <!-- Bloqueo por PIN -->
+  <div id="lock" class="lock hidden" aria-live="polite">
+    <div class="lock-box">
+      <img class="logo-big" src="icons/icon.svg" alt="Mi Cartera">
+      <h1>Mi Cartera</h1>
+      <p class="muted">Ingresa tu PIN</p>
+      <input id="lockPin" type="password" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="••••">
+      <button id="lockBtn" class="btn primary block">Desbloquear</button>
+      <p id="lockErr" class="error-text"></p>
+    </div>
+  </div>
+
+  <header class="topbar">
+    <button id="backBtn" class="icon-btn hidden" aria-label="Volver">
+      <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <div class="brand">
+      <button type="button" id="avatarBtn" class="brand-mark avatar" aria-label="Foto de perfil"><span id="avatarTxt">MC</span><img id="avatarImg" alt="" hidden><span id="cloudDot" class="cloud-dot hidden" title="Nube"></span></button>
+      <input type="file" id="fotoInput" accept="image/*" hidden>
+      <div>
+        <div id="pageTitle" class="page-title">Inicio</div>
+        <div id="pageSub" class="page-sub">Ejecutivo de cuenta</div>
+      </div>
+    </div>
+    <button id="quickAdd" class="icon-btn" aria-label="Agregar">
+      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+  </header>
+
+  <main id="view" class="view" tabindex="-1"></main>
+
+  <nav class="bottomnav" aria-label="Navegación principal">
+    <a href="#/" data-nav="inicio">
+      <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>
+      <span>Inicio</span>
+    </a>
+    <a href="#/clientes" data-nav="clientes">
+      <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6"/><path d="M16 4a4 4 0 0 1 0 8M22 21c0-3-1.5-5-4-5.7"/></svg>
+      <span>Clientes</span>
+    </a>
+    <a href="#/homebase" data-nav="homebase">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>
+      <span>Home Base</span>
+    </a>
+    <a href="#/calculadora" data-nav="calculadora">
+      <svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 19h8"/></svg>
+      <span>Calculadora</span>
+    </a>
+    <a href="#/mas" data-nav="mas">
+      <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+      <span>Más</span>
+    </a>
+  </nav>
+
+  <!-- Hoja modal (formularios) -->
+  <div id="sheet" class="sheet hidden" role="dialog" aria-modal="true">
+    <div class="sheet-backdrop" data-close></div>
+    <div class="sheet-panel">
+      <div class="sheet-handle"></div>
+      <div class="sheet-head">
+        <h2 id="sheetTitle"></h2>
+        <button class="icon-btn" data-close aria-label="Cerrar">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div id="sheetBody" class="sheet-body"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/calculadora.js"></script>
+  <script src="js/propuesta-pdf.js"></script>
+  <script src="js/vehicular.js"></script>
+  <script src="js/gerente.js"></script>
+  <script type="module" src="js/nube.js"></script>
+</body>
+</html>
