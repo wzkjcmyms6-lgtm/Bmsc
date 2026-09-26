@@ -161,7 +161,7 @@ function vehForm() {
   const persona = (p, titulo) => `
     <div class="veh-persona">
       <div class="veh-persona-head"><b>${titulo}</b><span class="badge gray" id="edad_${p || 't'}">Edad —</span></div>
-      ${field({ label: 'Nombre (opcional)', name: p ? p + 'Nombre' : 'nombre', value: V[p ? p + 'Nombre' : 'nombre'], attrs: 'autocomplete="off"' })}
+      ${field({ label: 'Nombre completo (opcional)', name: p ? p + 'Nombre' : 'nombre', value: V[p ? p + 'Nombre' : 'nombre'], placeholder: 'Nombres y apellidos', attrs: 'autocomplete="off"' })}
       <div class="ci-row">
         ${field({ label: 'Carnet (opcional)', name: p ? p + 'Ci' : 'ci', value: V[p ? p + 'Ci' : 'ci'], attrs: 'inputmode="numeric" autocomplete="off"' })}
         ${field({ label: 'Extensión', name: p ? p + 'Ext' : 'ext', type: 'select', value: V[p ? p + 'Ext' : 'ext'] || '', options: CI_EXT })}
@@ -743,6 +743,13 @@ function vehCalc() {
     <div class="seg-toggle">${['3', '6'].map(n => `<label><input type="radio" name="boletasPdf" value="${n}" ${(V.boletas === '6' ? '6' : '3') === n ? 'checked' : ''} data-act="vehBoletas"><span>${n}</span></label>`).join('')}</div></div>
 ` : ''}
   ${bloqueRequisitos(V, { consumo })}
+  ${consumo ? `<div class="card no-print frm106">
+    <div><b>Formulario FRM-CR106</b><div class="small muted">Autorización para investigación de antecedentes. Sale con la ciudad, la fecha de la propuesta y el nombre completo y CI del titular${V.codeudor === 'si' ? ' y del codeudor' : ''}, listo para que el cliente lo imprima, firme y escanee.</div></div>
+    <div class="frm106-fila">
+      <div class="field" style="margin:0;flex:1"><label for="frmCiudad">Ciudad</label><input id="frmCiudad" value="${esc(V.ciudadFrm || 'La Paz')}" autocomplete="off"></div>
+      <button type="button" class="btn sm primary" data-act="vehFRM106">📝 Generar formulario</button>
+    </div>
+  </div>` : ''}
 
   <details class="card tight plan" ${V.verPlan ? 'open' : ''} id="vehPlan">
     <summary style="padding:14px;cursor:pointer;font-weight:700">📅 Plan de pagos (${plazo} cuotas)</summary>
@@ -769,6 +776,7 @@ function vehCalc() {
     eT, eC, teac, totales: plan.totales,
     desglose: x => ({ capInt: x.cuota, desg: desg ? parte(x, desg) : 0, dima: dima ? parte(x, dima) : 0, ces: ces ? parte(x, ces) : 0 }) };
   if (consumo && typeof cargarJsPDF === 'function') { cargarJsPDF().catch(() => {}); cargarLogoPDF(); } // listo para que el PDF salga al instante
+  $('#frmCiudad')?.addEventListener('input', e => { vehState().ciudadFrm = e.target.value; guardarCalc(); });
   $('#pdfDetalle')?.addEventListener('change', e => { V.pdfDetalle = e.target.checked ? 'si' : ''; guardarCalc(); });
 }
 
@@ -1062,6 +1070,13 @@ Object.assign(ACTIONS, {
     const producto = vehState().producto; // se mantiene el tipo de crédito elegido
     calcState().veh = null; vehState().producto = producto; UI.simsAbierto = false; guardarCalc(); render();
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  },
+  vehFRM106: () => {
+    const u = vehCalc.ultimo, V = vehState(); if (!u) return;
+    const falta = [!String(V.nombre || '').trim() && 'el nombre completo del titular', !V.ci && 'el CI del titular',
+      V.codeudor === 'si' && !String(V.cNombre || '').trim() && 'el nombre completo del codeudor', V.codeudor === 'si' && !V.cCi && 'el CI del codeudor'].filter(Boolean);
+    if (falta.length) toast('Falta ' + falta.join(', ') + ' (sección 1). Se genera con esos espacios en blanco.');
+    compartirPropuestaPDF({ ...u, V: { ...V } }, generarFRM106PDF);
   },
   vehPDF: () => { const u = vehCalc.ultimo, V = vehState(); if (u) compartirPropuestaPDF({ ...u, V: { ...u.V, boletas: V.boletas, reqExtra: V.reqExtra, pdfDetalle: V.pdfDetalle } }); },
   // Requisitos extra que añade el ejecutivo (salen en el PDF y en WhatsApp)

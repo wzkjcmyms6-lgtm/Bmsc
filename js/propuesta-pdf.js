@@ -212,9 +212,9 @@ function generarPropuestaPDF(u) {
 }
 
 /* Genera el PDF y lo comparte (WhatsApp, Archivos…) o lo descarga si el celular no permite compartir */
-async function compartirPropuestaPDF(u) {
+async function compartirPropuestaPDF(u, generar = generarPropuestaPDF) {
   try { await Promise.all([cargarJsPDF(), cargarLogoPDF()]); } catch (e) { toast(e.message + '. Revisa tu conexión.'); return; }
-  const { doc, nombre } = generarPropuestaPDF(u);
+  const { doc, nombre } = generar(u);
   const blob = doc.output('blob');
   const file = new File([blob], nombre, { type: 'application/pdf' });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -228,3 +228,57 @@ async function compartirPropuestaPDF(u) {
   setTimeout(() => URL.revokeObjectURL(url), 30000);
   toast('PDF generado');
 }
+
+/* ---------- FRM-CR106: Autorización para investigación de antecedentes ----------
+   Réplica del formulario del banco, llenada con la ciudad, la fecha de la propuesta y el nombre
+   completo y CI del titular y del codeudor. El cliente lo imprime, firma y escanea. */
+const FRM106_TITULO = 'AUTORIZACIÓN PARA INVESTIGACIÓN DE ANTECEDENTES Y ENVÍO DE INFORMACIÓN A LA COMPAÑÍA DE SEGUROS';
+const FRM106_TEXTO = [
+  'Yo / Nosotros autorizo / autorizamos al Banco Mercantil Santa Cruz S.A. a investigar todos mis / nuestros antecedentes personales y/o comerciales que se encuentren en bases de datos administrados por la Autoridad de Supervisión del Sistema Financiero, por cualquier Buró de Información o por otras entidades públicas o privadas a efectos de que el Banco pueda considerar y evaluar las solicitudes de créditos relacionadas con la documentación adjunta.',
+  'Asimismo, autorizo / autorizamos expresamente al Banco efectuar esta labor por intermedio de terceras empresas contratadas para dicho fin bajo los respectivos términos y condiciones de confidencialidad conforme a Ley.',
+  'El Banco será propietario exclusivo de toda información que obtenga y no estará obligado a emitir información alguna, ni a restituir los antecedentes que se hubieran recopilado en el curso de las investigaciones emergentes de manera previa a las solicitudes de los créditos relacionados.',
+  'En caso que el Banco como tomador, contrate a mi nombre una póliza de seguro de desgravamen, autorizo expresamente a éste a proporcionar información relacionada a mi operación crediticia y a las operaciones relacionadas a la Compañía de Seguros si corresponde a los efectos de la cobertura de la póliza contratada.',
+  'Autorizo (amos) que la información que he (hemos) proporcionado al Banco Mercantil Santa Cruz S.A. entidad con la que mantengo relaciones comerciales, sea compartida con las Empresas Financieras Integrantes del Grupo Financiero Mercantil Santa Cruz a la que la mencionada empresa pertenece, con fines relacionados a la prevención de la Legitimación de Ganancias Ilícitas, el Financiamiento al Terrorismo y el Financiamiento de la Proliferación de Armas de Destrucción Masiva.'
+];
+function generarFRM106PDF(u) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'letter' });
+  const V = u.V, W = 215.9, M = 25, ancho = W - 2 * M;
+  const negro = [0, 0, 0];
+  const f = (estilo, tam) => { doc.setFont('helvetica', estilo); doc.setFontSize(tam); doc.setTextColor(...negro); };
+  const firmantes = [{ n: V.nombre, ci: V.ci, ext: V.ext }];
+  if (V.codeudor === 'si') firmantes.push({ n: V.cNombre, ci: V.cCi, ext: V.cExt });
+
+  let y = 22;
+  f('bold', 9); doc.text('FRM-CR106', M, y);
+  y += 10;
+  f('bold', 12);
+  const tit = doc.splitTextToSize(FRM106_TITULO, ancho - 10);
+  doc.text(tit, W / 2, y, { align: 'center' });
+  y += tit.length * 5.6 + 8;
+  // Ciudad y fecha de la propuesta (día/mes/año)
+  const [a, m, d] = today().split('-');
+  f('normal', 11); doc.text(`${(V.ciudadFrm || 'La Paz').trim()}, ${d}/${m}/${a}`, W - M, y, { align: 'right' });
+  y += 11;
+  f('normal', 10.5);
+  FRM106_TEXTO.forEach(p => {
+    const lineas = doc.splitTextToSize(p, ancho);
+    doc.text(lineas, M, y, { align: 'justify', maxWidth: ancho, lineHeightFactor: 1.35 });
+    y += lineas.length * 10.5 * 0.3528 * 1.35 + 4.5;
+  });
+  // Firmas: una por persona (titular y codeudor), en dos columnas
+  y = Math.max(y + 26, 205);
+  const col = (ancho - 16) / 2;
+  firmantes.forEach((p, i) => {
+    const x = M + (i % 2) * (col + 16), yy = y + Math.floor(i / 2) * 42;
+    doc.setDrawColor(...negro); doc.setLineWidth(0.3); doc.line(x, yy, x + col, yy);
+    f('normal', 10); doc.text('Firma', x + col / 2, yy + 5, { align: 'center' });
+    f('normal', 10); doc.text('Nombre:', x, yy + 13);
+    f('bold', 10); doc.text(doc.splitTextToSize(String(p.n || '').trim().toUpperCase(), col - 17), x + 16, yy + 13);
+    f('normal', 10); doc.text('CI:', x, yy + 23);
+    f('bold', 10); doc.text(p.ci ? `${p.ci}${p.ext ? ' ' + p.ext : ''}` : '', x + 16, yy + 23);
+  });
+  const quien = String(V.nombre || '').trim();
+  return { doc, nombre: `FRM-CR106 Autorización${quien ? ' - ' + quien : ''}.pdf` };
+}
+

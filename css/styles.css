@@ -624,3 +624,6 @@ table.tbl.tabla-norma th { white-space: normal; line-height: 1.2; vertical-align
 .pdf-detalle-row { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; }
 .pdf-detalle-row input { width: 22px; height: 22px; margin-top: 2px; flex: none; accent-color: var(--green-600); }
 .pdf-detalle-row > span { display: grid; gap: 4px; }
+
+.frm106 { display: grid; gap: 10px; margin-top: 10px; }
+.frm106-fila { display: flex; gap: 10px; align-items: flex-end; }
