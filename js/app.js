@@ -434,9 +434,9 @@ $('#fotoInput')?.addEventListener('change', async ev => {
 /* ---------- Directorio de ejecutivos (todos los usuarios con sesión) ---------- */
 function viewDirectorio() {
   return `
-  <div class="search"><input id="dirBuscar" type="search" placeholder="Buscar por nombre o agencia" autocomplete="off"></div>
+  <div class="search"><input id="dirBuscar" type="search" placeholder="Buscar por nombre, agencia o usuario" autocomplete="off"></div>
   <div id="dirLista"><div class="card empty">Cargando directorio…</div></div>
-  <p class="small muted center">Cada ejecutivo aparece aquí al guardar su nombre, agencia, teléfono o foto en Ajustes.</p>`;
+  <p class="small muted center">Cada ejecutivo aparece aquí la primera vez que inicia sesión en la app. Su nombre, agencia, teléfono y foto se completan desde Ajustes.</p>`;
 }
 async function cargarDirectorio() {
   const box = $('#dirLista');
@@ -452,9 +452,9 @@ async function cargarDirectorio() {
     const f = lista.filter(x => !q || [x.nombre, x.agencia, x.usuario].join(' ').toLowerCase().includes(q));
     box.innerHTML = f.length ? `<div class="card tight">${f.map(x => `
       <div class="list-item dir-item">
-        <div class="dir-foto">${x.foto ? `<img src="${esc(x.foto)}" alt="">` : `<span>${esc(iniciales(x.nombre) || '?')}</span>`}</div>
-        <div class="grow"><div class="title">${esc(x.nombre || 'Sin nombre')}${x.esYo ? ' <span class="badge">Tú</span>' : ''}</div>
-          <div class="sub">${esc([x.agencia, x.telefono].filter(Boolean).join(' · ') || 'Sin datos de contacto')}</div></div>
+        <div class="dir-foto">${x.foto ? `<img src="${esc(x.foto)}" alt="">` : `<span>${esc(iniciales(x.nombre) || String(x.usuario || '?').slice(-2))}</span>`}</div>
+        <div class="grow"><div class="title">${esc(x.nombre || (x.usuario ? 'Usuario ' + x.usuario : 'Sin nombre'))}${x.esYo ? ' <span class="badge">Tú</span>' : ''}</div>
+          <div class="sub">${esc([x.usuario && x.nombre ? 'Usuario ' + x.usuario : '', x.agencia, x.telefono].filter(Boolean).join(' · ') || 'Todavía no completó sus datos en Ajustes')}</div></div>
         ${x.telefono && !x.esYo ? `<a class="icon-btn dir-btn" href="tel:${esc(x.telefono)}" aria-label="Llamar">${ICONS.phone}</a>
           <a class="icon-btn dir-btn" target="_blank" rel="noopener" href="${waLink(x.telefono, `Hola ${String(x.nombre || '').split(' ')[0]}, te escribe ${S().settings.ejecutivo || 'un compañero'} del BMSC.`)}" aria-label="WhatsApp">${ICONS.wa}</a>` : ''}
       </div>`).join('')}</div>` : '<div class="card empty">No hay ejecutivos que coincidan.</div>';

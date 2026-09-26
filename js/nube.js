@@ -287,6 +287,9 @@ async function alIniciarSesion(user) {
     await fusionInicial();
     escuchar();
     listo = true;
+    // Directorio: el ejecutivo queda registrado con su usuario apenas inicia sesión (sin tocar sus otros datos)
+    fs.setDoc(fs.doc(db, 'directorio', uidActual), { usuario: Nube.usuario, ultimoIngreso: new Date().toISOString() }, { merge: true })
+      .catch(e => console.warn('Directorio', e.code || e.message));
     while (pendientes.length) await escribir(pendientes.shift());
   } catch (e) {
     console.error('Firestore', e);
@@ -350,13 +353,13 @@ async function iniciar() {
     // Directorio de ejecutivos: solo datos de contacto (lo ven los usuarios con sesión)
     await fs.setDoc(fs.doc(db, 'directorio', uidActual), limpio({
       nombre: p.ejecutivo, agencia: p.agencia, telefono: p.telefonoEjecutivo, foto: p.foto, usuario: Nube.usuario, actualizado: ahora
-    })).catch(e => console.warn('Directorio', e.code || e.message));
+    }), { merge: true }).catch(e => console.warn('Directorio', e.code || e.message));
   };
   Nube.directorio = async () => {
     if (!uidActual) throw new Error('Inicia sesión');
     const snap = await fs.getDocs(fs.collection(db, 'directorio'));
     return snap.docs.map(d => ({ ...d.data(), esYo: d.id === uidActual }))
-      .filter(x => x.nombre || x.telefono || x.foto)
+      .filter(x => x.nombre || x.telefono || x.foto || x.usuario)
       .sort((a, b) => (b.esYo - a.esYo) || String(a.nombre || '').localeCompare(String(b.nombre || '')));
   };
   Nube.sincronizarTodo = () => subirTodo({ reemplazar: false, accion: 'sincronizar' });
