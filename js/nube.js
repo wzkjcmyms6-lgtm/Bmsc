@@ -317,7 +317,9 @@ async function iniciar() {
   };
   Nube.sincronizarTodo = () => subirTodo({ reemplazar: false, accion: 'sincronizar' });
   Nube.cerrarSesion = async () => {
-    await authMod.signOut(auth);
+    // Si Firebase no responde (sin internet), igual se cierra en el dispositivo
+    await Promise.race([authMod.signOut(auth), new Promise(ok => setTimeout(ok, 4000))]).catch(e => console.warn('signOut', e));
+    alCerrarSesion();
     // No dejar datos de clientes en el dispositivo después de salir
     Store.clearLocal();
     const st = Store.get(); st.settings.nubeFusionada = null; Store.save();

@@ -1696,10 +1696,19 @@ const ACTIONS = {
   openTips: () => { UI.hbTab = 'consejos'; location.hash = '#/homebase'; },
   pinSetup: () => pinSetup(),
   refreshTC: () => actualizarTC({ avisar: true }),
-  logout: async () => {
-    if (!confirm('¿Cerrar sesión? Los datos quedan guardados en la nube y se borran de este dispositivo.')) return;
-    await Nube.cerrarSesion(); toast('Sesión cerrada');
-  },
+  // Confirmación en una hoja propia (el confirm() del navegador a veces no aparece en el celular)
+  logout: () => openSheet('Cerrar sesión', `
+    <p style="margin-top:0">Tus datos quedan guardados en la nube y se borran de este dispositivo. Para volver a verlos, inicia sesión otra vez.</p>
+    <button type="button" class="btn danger block" id="btnSalir">Cerrar sesión</button>
+    <button type="button" class="btn ghost block" data-close style="margin-top:8px">Cancelar</button>`, body => {
+    $('[data-close]', body).addEventListener('click', closeSheet);
+    $('#btnSalir', body).addEventListener('click', async ev => {
+      ev.target.disabled = true; ev.target.textContent = 'Cerrando sesión…';
+      try { await Nube.cerrarSesion(); toast('Sesión cerrada'); }
+      catch (e) { toast('No se pudo cerrar la sesión: ' + (e.message || e)); }
+      closeSheet();
+    });
+  }),
   syncNube: async () => {
     try { await Nube.sincronizarTodo(); toast('Datos enviados a la nube'); } catch (e) { toast('No se pudo sincronizar: ' + e.message); }
   },
