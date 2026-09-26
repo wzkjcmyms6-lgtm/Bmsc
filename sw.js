@@ -1,5 +1,5 @@
 /* Service worker: permite usar la app sin conexión */
-const CACHE = 'mi-cartera-v74';
+const CACHE = 'mi-cartera-v75';
 const ASSETS = [
   './', 'index.html', 'css/styles.css', 'js/data.js', 'js/store.js', 'js/app.js', 'js/calculadora.js', 'js/vehicular.js', 'js/propuesta-pdf.js', 'js/gerente.js', 'js/vendor/jspdf.umd.min.js', 'icons/frm-cr106.jpg', 'js/firebase-config.js', 'js/nube.js',
   'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
@@ -7,7 +7,8 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  // cache: 'reload' → se baja la versión nueva, no la copia guardada por el navegador
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', e => {
@@ -23,7 +24,8 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
   const key = url.origin + url.pathname;
   e.respondWith(
-    fetch(e.request)
+    // cache: 'no-cache' → siempre pregunta al servidor si hay versión nueva (GitHub Pages guarda 10 min)
+    fetch(new Request(e.request.url, { cache: 'no-cache', credentials: 'same-origin' }))
       .then(res => {
         if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(key, copy)); }
         return res;
