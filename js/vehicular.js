@@ -857,13 +857,54 @@ function tarjetaCalc(V, out) {
   }));
   vehCalc.ultimo = { V: { ...V }, tarjeta: true, monto: limite, c1: { total: cuota }, cVar: null, plazo: '', cat, maxCat, k };
 }
-function compartirTarjeta(u) {
+/* Mensaje de WhatsApp para el cliente: con formato (*negrita*, _cursiva_) y emojis */
+const LINEA_MSJ = '━━━━━━━━━━━━━━━';
+const saludoMsj = V => { const n = String(V.nombre || '').trim().split(/\s+/)[0]; return `¡Hola${n ? ' ' + n : ''}! 👋`; };
+function firmaMsj() {
   const st = S().settings;
-  const text = `*Propuesta de tarjeta de crédito* (${fmtDate(today())})
-${u.V.nombre ? 'Cliente: ' + u.V.nombre + '\n' : ''}Tarjeta: ${u.cat.nombre}
-Límite: Bs ${nf2.format(u.monto)}
-Sujeto a evaluación y aprobación.
-${st.ejecutivo || ''} - Banco Mercantil Santa Cruz${st.telefonoEjecutivo ? `\nCel. ${st.telefonoEjecutivo}` : ''}`;
+  return [st.ejecutivo ? `*${st.ejecutivo}*` : '', 'Ejecutivo de cuenta · Banco Mercantil Santa Cruz', st.telefonoEjecutivo ? `📱 ${st.telefonoEjecutivo}` : ''].filter(Boolean).join('\n');
+}
+function mensajePropuesta(u) {
+  const V = u.V, bs = n => `Bs ${nf2.format(n)}`;
+  const seguros = [u.aplica && 'desgravamen', u.dima && 'DIMA', u.ces && 'cesantía', u.primaMSC && 'seguro automotor'].filter(Boolean);
+  const lista = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' y ' + a.at(-1) : a[0];
+  const l = [
+    saludoMsj(V),
+    `Te comparto tu propuesta de *${u.consumo ? 'crédito de consumo' : 'crédito vehicular'}* ${u.consumo ? '💵' : '🚗'}`,
+    '',
+    LINEA_MSJ
+  ];
+  if (!u.consumo) l.push(`🚘 *Vehículo:* ${V.estado === 'usado' ? 'usado' : 'nuevo'}, ${V.motor === 'hibrido' ? 'eléctrico/híbrido' : 'a gasolina'} · $us ${nf2.format(u.valorUsd)}`);
+  l.push(`💰 *Monto:* ${bs(u.monto)}`);
+  l.push(`📆 *Plazo:* ${u.plazo} meses (${nf0.format(u.plazo / 12)} ${u.plazo === 12 ? 'año' : 'años'})`);
+  l.push(`💳 *Cuota mensual:* *${bs(u.c1.total)}*`);
+  if (u.cVar) {
+    l.push(`   ↳ meses 1 a ${u.fijo} · tasa fija ${nf2.format(num(V.tasaFija))}%`);
+    l.push(`   ↳ desde el mes ${u.fijo + 1}: ${bs(u.cVar.total)} aprox.`);
+  } else l.push(`   ↳ tasa fija ${nf2.format(num(V.tasaFija))}% todo el plazo`);
+  l.push(seguros.length ? `🛡️ *Seguros incluidos:* ${lista(seguros)}` : '🛡️ *Seguros:* sin desgravamen');
+  l.push(LINEA_MSJ);
+  if (u.consumo && typeof requisitosConsumo === 'function') {
+    l.push('', '📋 *Requisitos:*', ...requisitosConsumo({ ...u, V: { ...V, boletas: vehState().boletas } }).map(r => `✅ ${r}`));
+  }
+  l.push('', `_Propuesta referencial del ${fmtDate(today())}, sujeta a evaluación y aprobación._`, '', '¿Avanzamos con tu solicitud? 🙌', firmaMsj());
+  return l.join('\n');
+}
+function compartirTarjeta(u) {
+  const text = [
+    saludoMsj(u.V),
+    'Te comparto tu propuesta de *tarjeta de crédito* 💳',
+    '',
+    LINEA_MSJ,
+    `🏷️ *Tarjeta:* ${u.cat.nombre}`,
+    `💰 *Límite:* Bs ${nf2.format(u.monto)}`,
+    LINEA_MSJ,
+    '',
+    `_Propuesta referencial del ${fmtDate(today())}, sujeta a evaluación y aprobación._`,
+    '',
+    '¿Avanzamos con tu solicitud? 🙌',
+    firmaMsj()
+  ].join('\n');
   const tel = ($('#simTel')?.value || vehState().telefono || '').trim();
   if (phoneDigits(tel).length >= 8) window.open(waLink(tel, text), '_blank');
   else if (navigator.share) navigator.share({ text }).catch(() => {});
@@ -957,13 +998,7 @@ Object.assign(ACTIONS, {
     const u = vehCalc.ultimo; if (!u) return;
     if (u.tarjeta) return compartirTarjeta(u);
     const m = 'BOB';
-    const text = `*Propuesta de crédito ${u.consumo ? 'de consumo' : 'vehicular'}* (${fmtDate(today())})
-${u.V.nombre ? 'Cliente: ' + u.V.nombre + '\n' : ''}${u.consumo ? '' : `Vehículo ${u.V.estado === 'usado' ? 'usado' : 'nuevo'} (${u.V.motor === 'hibrido' ? 'eléctrico/híbrido' : 'a gasolina'}) · valor $us ${nf2.format(u.valorUsd)} = ${fmt(u.valor, m)} (TC ${nf2.format(u.tcVeh)})\n`}Monto a financiar: ${fmt(u.monto, m)}
-Plazo: ${u.plazo} meses
-Cuota mensual: *${fmt(u.c1.total, m)}*${u.cVar ? ` (meses 1-${u.fijo}); desde el mes ${u.fijo + 1}: ${fmt(u.cVar.total, m)} aprox.` : ''}
-${u.aplica ? `Incluye desgravamen${u.dima ? ' y DIMA' : ''}` : 'Sin desgravamen'}${u.ces ? '; seguro de cesantía' : ''}${u.primaMSC ? '; seguro automotor financiado' : ''}.
-Sujeto a evaluación y aprobación.
-${S().settings.ejecutivo || ''} - Banco Mercantil Santa Cruz${S().settings.telefonoEjecutivo ? `\nCel. ${S().settings.telefonoEjecutivo}` : ''}`;
+    const text = mensajePropuesta(u);
     // Con el teléfono registrado se abre directamente el chat de WhatsApp del cliente
     const tel = ($('#simTel')?.value || vehState().telefono || '').trim();
     if (phoneDigits(tel).length >= 8) window.open(waLink(tel, text), '_blank');
