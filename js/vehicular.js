@@ -886,7 +886,7 @@ const LINEA_MSJ = '━━━━━━━━━━━━━━━';
 const saludoMsj = V => { const n = String(V.nombre || '').trim().split(/\s+/)[0]; return `¡Hola${n ? ' ' + n : ''}! 👋`; };
 function firmaMsj() {
   const st = S().settings;
-  return [st.ejecutivo ? `*${st.ejecutivo}*` : '', 'Ejecutivo de cuenta · Banco Mercantil Santa Cruz', st.telefonoEjecutivo ? `📱 ${st.telefonoEjecutivo}` : ''].filter(Boolean).join('\n');
+  return [st.ejecutivo ? `*${st.ejecutivo}*` : '', [cargoTxt(), sucursalTxt(st.agencia)].filter(Boolean).join(' · '), 'Banco Mercantil Santa Cruz', st.telefonoEjecutivo ? `📱 ${st.telefonoEjecutivo}` : ''].filter(Boolean).join('\n');
 }
 function mensajePropuesta(u) {
   const V = u.V, bs = n => `Bs ${nf2.format(n)}`;

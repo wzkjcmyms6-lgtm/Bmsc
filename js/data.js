@@ -171,6 +171,10 @@ const VIS = {
 };
 const UFV_RESPALDO = { valor: 3.34865, fecha: '2026-09-24' };
 
+/* Sucursales. El ejecutivo elige una; el gerente de agencia maneja un grupo; el capacitador, ninguna. */
+const SUCURSALES_GERENTE = ['Achumani/Obrajes', 'San Miguel/Torre 501', 'Torre Idea/Miraflores', 'Tumusla/Perez', 'Camacho', 'Central'];
+const SUCURSALES = [...new Set(SUCURSALES_GERENTE.flatMap(s => s.split('/')))];
+
 /* Descuentos de ley al asalariado (Gestora Pública, 2026) */
 const APORTES = {
   laboral: 12.71, // 10% vejez + 1,71% riesgo común + 0,5% solidario + 0,5% comisión

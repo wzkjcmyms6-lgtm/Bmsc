@@ -272,13 +272,15 @@ $id('irLogin').addEventListener('click', ev => { ev.preventDefault(); verRegistr
 $id('registroForm').addEventListener('submit', async ev => {
   ev.preventDefault();
   const err = $id('regErr'), btn = $id('regBtn');
-  const usuario = $id('regUser').value.trim(), nombre = $id('regNombre').value.trim(), agencia = $id('regAgencia').value.trim();
+  const usuario = $id('regUser').value.trim(), nombre = $id('regNombre').value.trim();
+  const agencia = $id('regRol').value === 'capacitador' ? '' : $id('regAgencia').value.trim();
   const telefono = $id('regTel').value.trim();
   const rol = $id('regRol').value || 'ejecutivo';
   const clave = $id('regPass').value;
   err.textContent = '';
   if (!/^[\w.-]{3,}$/.test(usuario)) { err.textContent = 'Usuario no válido (solo números o letras, sin espacios)'; return; }
   if (telefono.replace(/\D/g, '').length < 7) { err.textContent = 'Ingresa tu número de celular'; return; }
+  if ($id('regRol').value !== 'capacitador' && !agencia) { err.textContent = 'Elige tu sucursal'; return; }
   if (clave !== $id('regPass2').value) { err.textContent = 'Las claves no coinciden'; return; }
   if (!auth) { err.textContent = 'Conectando… intenta en unos segundos'; return; }
   btn.disabled = true; btn.textContent = 'Creando cuenta…';

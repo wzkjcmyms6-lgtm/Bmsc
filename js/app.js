@@ -387,11 +387,40 @@ function route() {
   render();
   window.scrollTo(0, 0);
 }
-// Subtítulo de la barra superior (nombre y agencia) y foto de perfil del ejecutivo
+/* Sucursales según el rol (ejecutivo: una; gerente: su grupo; capacitador: ninguna) */
+const rolActual = () => window.Nube?.rol || 'ejecutivo';
+const sucursalesDe = rol => rol === 'capacitador' ? [] : rol === 'gerente' ? SUCURSALES_GERENTE : SUCURSALES;
+const sinTildes = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+// "Agencia Torre 501" → "Torre 501" (si coincide con una sucursal de la lista)
+const normalizaSucursal = t => { const x = sinTildes(String(t || '').replace(/^\s*(agencia|sucursal)\s+/i, '')); return [...SUCURSALES_GERENTE, ...SUCURSALES].find(s => sinTildes(s) === x) || ''; };
+const sucursalTxt = a => a ? 'Sucursal ' + a : '';
+const cargoTxt = () => ({ gerente: 'Gerente de agencia', capacitador: 'Capacitador comercial' })[rolActual()] || 'Ejecutivo de cuenta';
+function opcionesSucursal(rol, valor) {
+  const lista = sucursalesDe(rol);
+  const fuera = valor && !lista.includes(valor);
+  return `<option value="" ${valor ? '' : 'selected'} disabled>Elige tu sucursal</option>${fuera ? `<option value="${esc(valor)}" selected>${esc(valor)} (actual)</option>` : ''}${lista.map(s => `<option value="${esc(s)}" ${s === valor ? 'selected' : ''}>${esc(s)}</option>`).join('')}`;
+}
+// Registro: la lista de sucursales cambia con el rol
+(() => {
+  const rol = $('#regRol'), ag = $('#regAgencia'), box = $('#regAgenciaBox');
+  if (!rol || !ag) return;
+  const pinta = () => { ag.innerHTML = opcionesSucursal(rol.value, ''); const sin = rol.value === 'capacitador'; box.hidden = sin; ag.required = !sin; };
+  rol.addEventListener('change', pinta); pinta();
+})();
+// Datos ya guardados con texto libre ("Agencia Torre 501"): se pasan a la sucursal de la lista
+function migrarSucursal() {
+  const st = S().settings;
+  if (!st.agencia) return;
+  const n = normalizaSucursal(st.agencia);
+  if (n && n !== st.agencia) { st.agencia = n; Store.save(); window.Nube?.guardarPerfil?.().catch(() => {}); }
+}
+
+// Subtítulo de la barra superior (nombre y sucursal) y foto de perfil del ejecutivo
 const iniciales = n => String(n || '').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase();
 function pintarSub() {
   const st = S().settings;
-  $('#pageSub').textContent = [st.ejecutivo, st.agencia].filter(Boolean).join(' · ') || 'Ejecutivo de cuenta · BMSC';
+  migrarSucursal();
+  $('#pageSub').textContent = [st.ejecutivo, sucursalTxt(st.agencia)].filter(Boolean).join(' · ') || 'Ejecutivo de cuenta · BMSC';
   const img = $('#avatarImg'), txt = $('#avatarTxt');
   if (img) { img.hidden = !st.foto; if (st.foto) img.src = st.foto; }
   if (txt) { txt.hidden = !!st.foto; txt.textContent = iniciales(st.ejecutivo) || 'MC'; }
@@ -466,7 +495,7 @@ async function cargarDirectorio() {
       <div class="list-item dir-item">
         <div class="dir-foto">${x.foto ? `<img src="${esc(x.foto)}" alt="">` : `<span>${esc(iniciales(x.nombre) || String(x.usuario || '?').slice(-2))}</span>`}</div>
         <div class="grow"><div class="title">${esc(x.nombre || (x.usuario ? 'Usuario ' + x.usuario : 'Sin nombre'))}${x.esYo ? ' <span class="badge">Tú</span>' : ''}</div>
-          <div class="sub">${esc([x.usuario && x.nombre ? 'Usuario ' + x.usuario : '', x.agencia, x.telefono].filter(Boolean).join(' · ') || 'Todavía no completó sus datos en Ajustes')}</div></div>
+          <div class="sub">${esc([x.usuario && x.nombre ? 'Usuario ' + x.usuario : '', sucursalTxt(x.agencia), x.telefono].filter(Boolean).join(' · ') || 'Todavía no completó sus datos en Ajustes')}</div></div>
         ${x.telefono && !x.esYo ? `<a class="icon-btn dir-btn" href="tel:${esc(x.telefono)}" aria-label="Llamar">${ICONS.phone}</a>
           <a class="icon-btn dir-btn" target="_blank" rel="noopener" href="${waLink(x.telefono, `Hola ${String(x.nombre || '').split(' ')[0]}, te escribe ${S().settings.ejecutivo || 'un compañero'} del BMSC.`)}" aria-label="WhatsApp">${ICONS.wa}</a>` : ''}
       </div>`).join('')}</div>` : '<div class="card empty">No hay ejecutivos que coincidan.</div>';
@@ -486,7 +515,7 @@ function viewSolicitudes() {
       <div class="list-item dir-item">
         <div class="dir-foto"><span>${esc(iniciales(x.nombre) || String(x.usuario || '?').slice(-2))}</span></div>
         <div class="grow"><div class="title">${esc(x.nombre || 'Sin nombre')}</div>
-          <div class="sub">${esc(['Usuario ' + (x.usuario || '—'), x.agencia, x.telefono ? 'Cel. ' + x.telefono : '', x.creado ? fmtDate(x.creado.slice(0, 10)) : ''].filter(Boolean).join(' · '))}</div>
+          <div class="sub">${esc(['Usuario ' + (x.usuario || '—'), sucursalTxt(x.agencia), x.telefono ? 'Cel. ' + x.telefono : '', x.creado ? fmtDate(x.creado.slice(0, 10)) : ''].filter(Boolean).join(' · '))}</div>
           <div class="sub"><span class="badge ${x.estado === 'aprobado' ? '' : 'gray'}">${esc(ROLES[x.estado === 'aprobado' ? x.rol || 'ejecutivo' : x.rolSolicitado || 'ejecutivo'])}</span>${x.estado !== 'aprobado' && x.rolSolicitado && x.rolSolicitado !== 'ejecutivo' ? ' <span class="small muted">(solicitado)</span>' : ''}${x.estado === 'aprobado' && x.rol === 'gerente' ? ` <span class="small muted">· equipo de ${(x.equipo || []).length}</span>` : ''}</div></div>
         <div class="sol-btns">${botones(x)}</div>
       </div>`).join('')}</div>` : '';
@@ -1495,7 +1524,8 @@ function viewSettings() {
   <form id="fSettings">
     <div class="card">
       ${field({ label: 'Tu nombre', name: 'ejecutivo', value: st.ejecutivo, placeholder: 'Nombre del ejecutivo' })}
-      ${field({ label: 'Agencia / sucursal', name: 'agencia', value: st.agencia, placeholder: 'Ej. Agencia Equipetrol' })}
+      ${rolActual() === 'capacitador' ? '' : `<div class="field"><label>Sucursal</label><select name="agencia">${opcionesSucursal(rolActual(), st.agencia || '')}</select>
+        <div class="hint">${rolActual() === 'gerente' ? 'Las sucursales que manejas' : 'Aparece como "Sucursal …" en el PDF y en los mensajes'}</div></div>`}
       ${field({ label: 'Tu número de teléfono', name: 'telefonoEjecutivo', type: 'tel', value: st.telefonoEjecutivo || '', placeholder: '7XXXXXXX', hint: 'Aparece en el PDF de la propuesta y en los mensajes al cliente' })}
     </div>
     <div class="section-title">Metas mensuales</div>
@@ -1543,7 +1573,7 @@ ROUTES.ajustes.after = () => {
     ev.preventDefault();
     const d = formData(ev.target);
     Object.assign(S().settings, {
-      ejecutivo: d.ejecutivo.trim(), agencia: d.agencia.trim(), telefonoEjecutivo: (d.telefonoEjecutivo || '').trim(),
+      ejecutivo: d.ejecutivo.trim(), agencia: rolActual() === 'capacitador' ? '' : (d.agencia || S().settings.agencia || '').trim(), telefonoEjecutivo: (d.telefonoEjecutivo || '').trim(),
       metaMensual: num(d.metaMensual), metaClientes: parseInt(d.metaClientes, 10) || 0,
       tcModo: d.tcModo === 'manual' && num(d.tc) ? 'manual' : 'auto', tcTipo: d.tcTipo || 'tco', tc: num(d.tc) || '',
       theme: d.theme || S().settings.theme
@@ -1988,12 +2018,12 @@ function hojaRol(uid) {
   const candidatos = (Nube.solicitudes || []).filter(s => s.uid !== uid && s.estado === 'aprobado' && (s.rol || 'ejecutivo') === 'ejecutivo');
   const eq = new Set(x.equipo || []);
   openSheet(x.estado === 'aprobado' ? 'Rol y equipo' : 'Aprobar acceso', `
-    <p style="margin-top:0"><b>${esc(x.nombre || 'Usuario ' + x.usuario)}</b><br><span class="small muted">Usuario ${esc(x.usuario || '—')}${x.agencia ? ' · ' + esc(x.agencia) : ''}</span></p>
+    <p style="margin-top:0"><b>${esc(x.nombre || 'Usuario ' + x.usuario)}</b><br><span class="small muted">Usuario ${esc(x.usuario || '—')}${x.agencia ? ' · ' + esc(sucursalTxt(x.agencia)) : ''}</span></p>
     <div class="field"><label>Rol</label><select id="rolSel">${['ejecutivo', 'gerente', 'capacitador'].map(r => `<option value="${r}" ${r === rolIni ? 'selected' : ''}>${ROLES[r]}</option>`).join('')}</select>
       <div class="hint" id="rolHint"></div></div>
     <div id="equipoBox">
       <div class="small" style="font-weight:650;margin-bottom:6px">Equipo del gerente (puede ver su cartera y trámites)</div>
-      ${candidatos.length ? `<div class="equipo-lista">${candidatos.map(c => `<label class="chk equipo-chk"><input type="checkbox" value="${esc(c.uid)}" ${eq.has(c.uid) ? 'checked' : ''}><span>${esc(c.nombre || 'Usuario ' + c.usuario)}${c.agencia ? ' · ' + esc(c.agencia) : ''}</span></label>`).join('')}</div>`
+      ${candidatos.length ? `<div class="equipo-lista">${candidatos.map(c => `<label class="chk equipo-chk"><input type="checkbox" value="${esc(c.uid)}" ${eq.has(c.uid) ? 'checked' : ''}><span>${esc(c.nombre || 'Usuario ' + c.usuario)}${c.agencia ? ' · ' + esc(sucursalTxt(c.agencia)) : ''}</span></label>`).join('')}</div>`
         : '<div class="small muted">Todavía no hay ejecutivos aprobados para asignar.</div>'}
     </div>
     <button type="button" class="btn primary block" id="rolOk" style="margin-top:12px">${x.estado === 'aprobado' ? 'Guardar' : '✓ Aprobar'}</button>`, body => {
@@ -2031,7 +2061,7 @@ async function cargarEquipo() {
     box.innerHTML = visibles.length ? `<div class="card tight">${visibles.map(x => `
       <a class="list-item dir-item" href="#/equipo/${encodeURIComponent(x.uid)}">
         <div class="dir-foto">${x.foto ? `<img src="${esc(x.foto)}" alt="">` : `<span>${esc(iniciales(x.nombre) || String(x.usuario || '?').slice(-2))}</span>`}</div>
-        <div class="grow"><div class="title">${esc(x.nombre || 'Usuario ' + x.usuario)}</div><div class="sub">${esc([x.agencia, x.usuario ? 'Usuario ' + x.usuario : ''].filter(Boolean).join(' · '))}</div></div>
+        <div class="grow"><div class="title">${esc(x.nombre || 'Usuario ' + x.usuario)}</div><div class="sub">${esc([sucursalTxt(x.agencia), x.usuario ? 'Usuario ' + x.usuario : ''].filter(Boolean).join(' · '))}</div></div>
         <span class="muted">${ICONS.chev}</span></a>`).join('')}</div>`
       : `<div class="card empty">${Nube.rol === 'gerente' ? 'Todavía no tienes ejecutivos asignados. El administrador los asigna en Solicitudes de acceso → Rol y equipo.' : 'Todavía no hay ejecutivos registrados.'}</div>`;
     return;
@@ -2049,7 +2079,7 @@ async function cargarEquipo() {
   const abiertos = c.cases.filter(caseOpen);
   const enTramite = abiertos.reduce((s, k) => s + toBs(num(k.monto), k.moneda), 0);
   box.innerHTML = `
-  <div class="card small muted">👁️ Solo lectura · ${esc([x.agencia, x.usuario ? 'Usuario ' + x.usuario : ''].filter(Boolean).join(' · '))}</div>
+  <div class="card small muted">👁️ Solo lectura · ${esc([sucursalTxt(x.agencia), x.usuario ? 'Usuario ' + x.usuario : ''].filter(Boolean).join(' · '))}</div>
   <div class="hero"><div class="label">Cartera total</div><div class="big num">Bs ${nf0.format(total)}</div>
     <div class="meta"><div><b class="num">${c.clients.length}</b>clientes</div><div><b class="num">${nCred}</b>créditos</div><div><b class="num">${pct(total ? mora / total : 0, 1)}</b>mora</div></div></div>
   <div class="grid-2">
