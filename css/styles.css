@@ -589,3 +589,10 @@ table.tbl.tabla-norma th { white-space: normal; line-height: 1.2; vertical-align
 .acceso-aviso.rechazo { border-left-color: var(--red); }
 .sol-btns { display: flex; flex-direction: column; gap: 6px; flex: none; }
 .lock-box .link { color: var(--green-600); font-weight: 650; }
+
+/* Simulador de tarjeta */
+.tc-sel { background: var(--green-soft, rgba(0,135,90,.08)); border-radius: 8px; padding-left: 6px; padding-right: 6px; }
+.tc-pago summary { cursor: pointer; list-style: none; }
+.tc-pago summary::-webkit-details-marker { display: none; }
+.tc-pago[open] summary { margin-bottom: 8px; }
+.prod-sel { flex-wrap: wrap; }

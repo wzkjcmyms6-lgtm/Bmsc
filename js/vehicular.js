@@ -44,8 +44,12 @@ const VEH = {
 };
 // Tipo de crédito del simulador: consumo o vehicular (mismos ratios de endeudamiento)
 const esConsumo = V => V.producto === 'consumo';
-// Números de sección (consumo no tiene "Vehículo a financiar")
-const SEC = V => esConsumo(V) ? { ingresos: 4, deudas: 5, fin: 6 } : { vehiculo: 4, ingresos: 5, deudas: 6, fin: 7 };
+const esTarjeta = V => V.producto === 'tarjeta';
+// Números de sección (consumo no tiene "Vehículo a financiar"; tarjeta no tiene seguros ni condiciones)
+const SEC = V => esTarjeta(V) ? { ingresos: 2, deudas: 3, fin: 4 }
+  : esConsumo(V) ? { ingresos: 4, deudas: 5, fin: 6 } : { vehiculo: 4, ingresos: 5, deudas: 6, fin: 7 };
+const PRODUCTO_TXT = { consumo: ['💵', 'Crédito de consumo', 'Simulador de consumo'], tarjeta: ['💳', 'Tarjeta de crédito', 'Simulador de tarjeta'], vehicular: ['🚗', 'Crédito vehicular', 'Simulador vehicular'] };
+const productoDe = V => PRODUCTO_TXT[V.producto] ? V.producto : 'vehicular';
 const pct3 = v => new Intl.NumberFormat('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(v);
 const mensual = anual => new Intl.NumberFormat('es-BO', { minimumFractionDigits: 3, maximumFractionDigits: 4 }).format(anual / 12);
 const treMN = () => num(S().settings.treManual) || S().settings.tre?.mn || VEH.treMN;
@@ -134,7 +138,7 @@ function calcIngreso(tipo, monto, otros) {
 }
 function ingresosTotales(V) {
   const t = calcIngreso(V.tipoT, num(V.montoT), num(V.otrosT));
-  const c = V.codeudor === 'si' && V.ingC === 'si' ? calcIngreso(V.tipoC, num(V.montoC), num(V.otrosC)) : null;
+  const c = V.codeudor === 'si' && V.ingC === 'si' && !esTarjeta(V) ? calcIngreso(V.tipoC, num(V.montoC), num(V.otrosC)) : null;
   // Aguinaldo: solo si tiene crédito de vivienda; un sueldo al año ÷ 12 (solo ingresos por sueldo) se suma al líquido
   const agui = V.vivienda === 'si' && V.aguinaldo === 'si'
     ? (V.tipoT === 'sueldo' ? num(V.montoT) / 12 : 0) + (c && V.tipoC === 'sueldo' ? num(V.montoC) / 12 : 0) : 0;
@@ -164,23 +168,23 @@ function vehForm() {
   <form id="vehForm" class="calc-form no-print" onsubmit="return false">
     <div class="card prod-sel">
       <div class="small muted">Tipo de crédito</div>
-      ${opciones('producto', esConsumo(V) ? 'consumo' : 'vehicular', [['consumo', '💳 Consumo'], ['vehicular', '🚗 Vehicular']])}
+      ${opciones('producto', productoDe(V), [['consumo', '💵 Consumo'], ['vehicular', '🚗 Vehicular'], ['tarjeta', '💳 Tarjeta']])}
     </div>
     <div class="veh-top card">
       <div><div class="small muted">Fecha de elaboración de la propuesta</div><b>${fmtDate(today())}</b></div>
       <div class="veh-top-der">
-        <span class="badge">${esConsumo(V) ? '💳 Crédito de consumo' : '🚗 Crédito vehicular'}</span>
+        <span class="badge">${PRODUCTO_TXT[productoDe(V)].slice(0, 2).join(' ')}</span>
         <button type="button" class="btn sm veh-reset" data-act="vehSimNueva">↺ Resetear simulación</button>
       </div>
     </div>
 
     ${seccion(1, 'Datos del cliente', `
       ${persona('', 'Titular')}
-      <div class="veh-row"><span>¿Tiene codeudor?</span>${siNo('codeudor', V.codeudor)}</div>
-      ${V.codeudor === 'si' ? persona('c', 'Codeudor') : ''}
+      ${esTarjeta(V) ? '' : `<div class="veh-row"><span>¿Tiene codeudor?</span>${siNo('codeudor', V.codeudor)}</div>
+      ${V.codeudor === 'si' ? persona('c', 'Codeudor') : ''}`}
     `)}
 
-    ${seccion(2, 'Seguros', `
+    ${esTarjeta(V) ? '' : seccion(2, 'Seguros', `
       <div class="veh-row veh-seg"><div><span>Seguro de desgravamen</span><div class="small muted" id="desgInfo"></div></div>
         <div class="chk-group">${chk('desgT', V.desgT, 'Titular')}${V.codeudor === 'si' ? chk('desgC', V.desgC, 'Codeudor') : ''}</div></div>
       <div class="veh-row veh-seg"><div><span>Seguro DIMA</span><div class="small muted" id="dimaInfo"></div></div>
@@ -189,7 +193,7 @@ function vehForm() {
         <div class="chk-group">${chk('cesT', V.cesT, 'Titular')}${V.codeudor === 'si' ? chk('cesC', V.cesC, 'Codeudor') : ''}</div></div>` : ''}
     `)}
 
-    ${seccion(3, 'Condiciones', `
+    ${esTarjeta(V) ? '' : seccion(3, 'Condiciones', `
       <div class="fields-2">
         ${field({ label: 'Interés fijo % anual', name: 'tasaFija', type: 'money', value: V.tasaFija })}
         ${field({ label: 'Interés variable % anual', name: 'margenVar', type: 'money', value: V.margenVar })}
@@ -202,7 +206,7 @@ function vehForm() {
       <div class="small muted" id="tasaVarInfo"></div>
     `)}
 
-    ${esConsumo(V) ? '' : seccion(4, 'Vehículo a financiar', `
+    ${esConsumo(V) || esTarjeta(V) ? '' : seccion(4, 'Vehículo a financiar', `
       <div class="veh-row"><span>Vehículo</span>${opciones('estado', V.estado, [['nuevo', 'Nuevo'], ['usado', 'Usado']])}</div>
       <div class="veh-row"><span>Tipo de motor</span>${opciones('motor', V.motor, [['gasolina', 'A gasolina'], ['hibrido', 'Eléctrico / híbrido']])}</div>
       <div class="fields-2">
@@ -215,7 +219,7 @@ function vehForm() {
 
     ${seccion(SEC(V).ingresos, 'Ingresos', `
       ${ingresoPersona(V, 'T', 'Titular')}
-      ${V.codeudor === 'si' && V.ingC === 'si'
+      ${esTarjeta(V) ? '' : V.codeudor === 'si' && V.ingC === 'si'
         ? ingresoPersona(V, 'C', 'Codeudor', `<button type="button" class="link-btn" data-act="vehIngC" data-v="no">Quitar</button>`)
         : `<button type="button" class="btn block veh-add" data-act="vehIngC" data-v="si">+ Añadir ingresos del codeudor (opcional)</button>`}
       <div class="veh-row"><div><span>¿Tiene crédito de vivienda?</span><div class="small muted">En el BMSC o en otros bancos</div></div>${siNo('vivienda', V.vivienda)}</div>
@@ -255,7 +259,7 @@ function vehForm() {
       <div id="capBox"></div>
     `)}
 
-    ${seccion(SEC(V).fin, 'Financiamiento', esConsumo(V) ? `
+    ${esTarjeta(V) ? seccion(SEC(V).fin, 'Tarjeta de crédito', tarjetaForm(V)) : seccion(SEC(V).fin, 'Financiamiento', esConsumo(V) ? `
       <div id="finMax"></div>
       <div class="fin-linea">
         <div><span>Monto del crédito</span><div class="small muted">Monto que solicita el cliente</div></div>
@@ -288,7 +292,7 @@ function historialSims(V) {
     ${sims.length ? `<div class="sims-lista">${sims.map(x => `
       <div class="sim-item ${x.id === V.simId ? 'activa' : ''}">
         <button type="button" class="sim-abrir" data-act="vehSimAbrir" data-id="${esc(x.id)}">
-          <b>${x.datos?.producto === 'consumo' ? '💳' : '🚗'} ${esc(x.nombre || 'Sin nombre')}</b>
+          <b>${PRODUCTO_TXT[productoDe(x.datos || {})][0]} ${esc(x.nombre || 'Sin nombre')}</b>
           <span class="num">Bs ${nf2.format(num(x.monto))}${x.cuota ? ` · cuota Bs ${nf2.format(num(x.cuota))}` : ''}</span>
           <span class="small muted">${fmtDate((x.actualizado || x.creado || '').slice(0, 10))}${x.telefono ? ' · 📞 ' + esc(x.telefono) : ''}${x.plazo ? ' · ' + x.plazo + ' meses' : ''}</span>
         </button>
@@ -470,8 +474,8 @@ function pintaCapacidad(V, cuotaNueva) {
     ${k.sinTarjetas ? '<div class="small" style="margin-top:8px;color:var(--red)">⚠️ Las tarjetas no suman su cuota: faltan los parámetros de tarjetas en este dispositivo.</div>' : ''}
     ${k.sinNorma ? '<div class="small" style="margin-top:8px;color:var(--red)">⚠️ No se evaluó el límite total con vivienda: faltan los parámetros de la norma en este dispositivo (inicia sesión con internet o cárgalos en Más → Parámetros de productos).</div>' : ''}
     <div class="row between" style="margin-top:10px"><span class="small">Cuota máxima para el nuevo crédito${k.conVivienda && k.limitaVivienda ? '<br><span class="muted">(la limita el total con vivienda)</span>' : ''}</span><b class="num">Bs ${nf2.format(k.maxNueva)}</b></div>
-    ${tcLimiteHtml(k)}
-    ${cuotaNueva ? `<div class="row between"><span class="small">Cuota del vehículo (la más alta)</span><b class="num" style="color:${k.cumple ? 'var(--green-600)' : 'var(--red)'}">Bs ${nf2.format(cuotaNueva)}</b></div>` : ''}
+    ${esTarjeta(V) ? '' : tcLimiteHtml(k)}
+    ${cuotaNueva ? `<div class="row between"><span class="small">${esTarjeta(V) ? 'Cuota de la tarjeta nueva' : esConsumo(V) ? 'Cuota del crédito (la más alta)' : 'Cuota del vehículo (la más alta)'}</span><b class="num" style="color:${k.cumple ? 'var(--green-600)' : 'var(--red)'}">Bs ${nf2.format(cuotaNueva)}</b></div>` : ''}
   </div>`;
   return k;
 }
@@ -480,6 +484,7 @@ function vehCalc() {
   const out = $('#vehOut');
   if (!out) return;
   const V = vehState();
+  if (esTarjeta(V)) return tarjetaCalc(V, out);
   const m = 'BOB';
   const conCodeudor = V.codeudor === 'si';
   const eT = edadDe(V.fnac), eC = conCodeudor ? edadDe(V.cFnac) : null;
@@ -721,11 +726,155 @@ function vehCalc() {
   if (consumo && typeof cargarJsPDF === 'function') cargarJsPDF().catch(() => {}); // se deja listo para que el PDF salga al instante
 }
 
+/* ---------------- Tarjeta de crédito ----------------
+   Límite solicitado → cuota a considerar (monto fijo + % del límite, según la categoría) → capacidad de pago.
+   También: límite máximo por categoría y cuánto tarda en pagar una deuda de tarjeta. */
+const catElegida = V => VEH.categoriasTC.some(([v]) => v === V.tcCat) ? V.tcCat : 'clasica';
+function tarjetaForm(V) {
+  return `
+    <div id="tcMaxBox"></div>
+    <div class="field"><label>Categoría de tarjeta</label>
+      <select name="tcCat">${VEH.categoriasTC.map(([v, l]) => `<option value="${v}" ${catElegida(V) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+    <div class="fin-linea">
+      <div><span>Límite solicitado</span><div class="small muted" id="tcLimInfo"></div></div>
+      <div class="fin-input"><span>Bs</span><input name="tcLimite" type="text" inputmode="decimal" placeholder="0,00" value="${esc(V.tcLimite || '')}"></div>
+    </div>
+    <div class="fin-total"><span>Cuota a considerar</span><b class="num" id="tcCuotaTot">—</b></div>`;
+}
+/* Meses para pagar una deuda de tarjeta con un pago fijo mensual (interés mensual sobre el saldo) */
+function mesesPagoTC(saldo, tasaAnual, pago) {
+  const i = tasaAnual / 100 / 12;
+  if (!(saldo > 0) || !(pago > 0)) return null;
+  if (pago <= saldo * i + 0.005) return { nunca: true };
+  let s = saldo, n = 0, intereses = 0;
+  while (s > 0.005 && n < 1200) { const int = s * i; intereses += int; s = s + int - pago; n++; }
+  return { meses: n, intereses, total: saldo + intereses };
+}
+function tarjetaCalc(V, out) {
+  const eT = edadDe(V.fnac);
+  const bT = $('#edad_t'); if (bT) { bT.textContent = eT ? edadTxt(eT) : 'Edad —'; bT.className = 'badge ' + (eT ? '' : 'gray'); }
+  const T = tarjetasCfg();
+  const cat = T ? T.cats[catElegida(V)] : null;
+  const limite = num(V.tcLimite);
+  const cuota = cat && limite > 0 ? cat.fijo + limite * cat.pct / 100 : 0;
+  const k = pintaCapacidad(V, cuota);
+  const kMax = capacidadDeudas(V, 0);
+  const L = T && kMax.mensual ? limitesTC(kMax.maxNueva) : null;
+  const maxCat = L ? L.find(x => x.id === catElegida(V)) : null;
+  const sugerida = L ? [...L].reverse().find(x => x.alcanza) : null;
+  const fmtLim = x => x.tope ? `Bs ${nf0.format(x.tope)} o más` : `hasta Bs ${nf0.format(x.lim)}`;
+
+  const box = $('#tcMaxBox');
+  if (box) box.innerHTML = !T ? '<div class="fin-max vacio small">⚠️ Faltan los parámetros de tarjetas en este dispositivo (inicia sesión con internet o cárgalos en Más → Parámetros de productos).</div>'
+    : !kMax.mensual ? `<div class="fin-max vacio small">Ingresa los ingresos (sección ${SEC(V).ingresos}) para calcular el límite máximo.</div>`
+    : `<div class="fin-max ${maxCat && limite > maxCat.lim && !maxCat.tope ? 'excede' : ''}">
+        <div class="row between"><span>Límite máximo por categoría</span><span class="small muted num">cuota libre Bs ${nf2.format(kMax.maxNueva)}</span></div>
+        ${L.map(x => `<div class="row between tc-lim-fila ${x.id === catElegida(V) ? 'tc-sel' : ''}"><span>${esc(x.corto)}</span>${x.alcanza ? `<b class="num">${fmtLim(x)}</b>` : `<span class="small" style="color:var(--red)">No alcanza (mín. Bs ${nf0.format(x.minimo)})</span>`}</div>`).join('')}
+        ${sugerida ? `<div class="small muted" style="margin-top:4px">Categoría más alta que alcanza: <b>${esc(sugerida.corto)}</b></div>` : '<div class="small fin-max-aviso">Con la capacidad actual no alcanza para ninguna categoría.</div>'}
+        ${maxCat && maxCat.alcanza ? `<button type="button" class="btn sm" data-act="vehTcMax" data-v="${maxCat.tope || maxCat.lim}">Usar el máximo (${esc(maxCat.corto)})</button>` : ''}
+      </div>`;
+  const li = $('#tcLimInfo');
+  if (li) li.innerHTML = !cat ? '' : `Mínimo de la categoría: Bs ${nf0.format(cat.minimo)}${limite && limite < cat.minimo ? ' · <span style="color:var(--red)">el límite es menor al mínimo</span>' : ''}`;
+  const ct = $('#tcCuotaTot'); if (ct) ct.textContent = cuota ? `Bs ${nf2.format(cuota)}` : '—';
+
+  const avisos = [];
+  if (!V.fnac) avisos.push('Ingresa la fecha de nacimiento del titular.');
+  if (cat && limite && limite < cat.minimo) avisos.push(`El límite es menor al mínimo de ${cat.corto} (Bs ${nf0.format(cat.minimo)}): elige otra categoría o sube el límite.`);
+  if (maxCat && limite > maxCat.lim && !maxCat.tope) avisos.push(`El límite supera lo que permite la capacidad de pago para ${maxCat.corto} (${fmtLim(maxCat)}).`);
+  const avisosHtml = avisos.length ? `<div class="card veh-avisos">${avisos.map(a => `<div>⚠️ ${esc(a)}</div>`).join('')}</div>` : '';
+  if (!(limite > 0) || !cat) {
+    out.innerHTML = `${avisosHtml}<div class="card empty small">💡 Ingresa el límite solicitado (sección ${SEC(V).fin}) para evaluar la tarjeta.</div>`;
+    vehCalc.ultimo = null;
+    return;
+  }
+
+  // ¿Cuánto tarda en pagar? (educativo, con la tasa y el pago mínimo de Parámetros)
+  const P = prod('tarjeta');
+  const saldo = num(V.tcSaldo) || limite, tasa = num(V.tcTasa) || P.tasa;
+  const pagoMin = saldo * (P.pagoMinimo || 5) / 100;
+  const pago = num(V.tcPago) || Math.round(pagoMin * 100) / 100;
+  const r1 = mesesPagoTC(saldo, tasa, pago), r2 = mesesPagoTC(saldo, tasa, pago * 2);
+  const txtMeses = r => !r ? '—' : r.nunca ? 'nunca termina (el pago no cubre los intereses)' : `${r.meses} meses (${nf2.format(r.meses / 12)} años) · intereses Bs ${nf2.format(r.intereses)}`;
+
+  out.innerHTML = `
+  ${avisosHtml}
+  <div class="hero veh-hero">
+    <div class="label">Tarjeta ${esc(cat.corto)} · límite Bs ${nf2.format(limite)}</div>
+    <div class="veh-cuota veh-cuota-hero"><div class="small muted">Cuota a considerar en la evaluación</div>
+      <div class="veh-cuota-big num">Bs ${nf2.format(cuota)}</div>
+      <div class="veh-desglose small"><span>Monto fijo <b class="num">Bs ${nf2.format(cat.fijo)}</b></span><span>${pctTC(cat.pct)}% del límite <b class="num">Bs ${nf2.format(limite * cat.pct / 100)}</b></span></div>
+    </div>
+  </div>
+
+  <div class="card sim-guardar no-print">
+    <label for="simTel"><b>Registrar número de teléfono</b></label>
+    <div class="sim-guardar-row">
+      <input id="simTel" type="tel" inputmode="tel" autocomplete="off" placeholder="7XXXXXXX" value="${esc(V.telefono || '')}">
+      <button type="button" class="btn primary" data-act="vehSimGuardar">${V.simId && S().sims.some(x => x.id === V.simId) ? 'Actualizar' : 'Guardar'}</button>
+    </div>
+    <div class="small muted">Se guarda en el historial de simulaciones con el nombre del titular y el límite.</div>
+  </div>
+
+  <div class="card">
+    <div class="veh-res-title">Resumen de la tarjeta</div>
+    <dl class="kv">
+      <dt>Titular</dt><dd>${esc(V.nombre || '—')}${eT ? ' · ' + edadTxt(eT) : ''}</dd>
+      <dt>Categoría</dt><dd>${esc(cat.nombre)}</dd>
+      <dt>Límite solicitado</dt><dd class="num"><b>Bs ${nf2.format(limite)}</b></dd>
+      <dt>Cuota a considerar</dt><dd class="num">Bs ${nf2.format(cuota)}</dd>
+      ${k && k.mensual ? `<dt>Capacidad de pago</dt><dd>${(k.sinNorma || k.sinTarjetas) && k.okCons ? '⚠️ Incompleto (faltan parámetros)' : k.cumple ? '✅ Cumple' : '❌ No cumple'} · ${nf2.format(k.pc)}% de ${k.limCons}%</dd>` : ''}
+      ${maxCat ? `<dt>Límite máximo (${esc(maxCat.corto)})</dt><dd class="num">${maxCat.alcanza ? fmtLim(maxCat) : 'No alcanza'}</dd>` : ''}
+    </dl>
+  </div>
+
+  <div class="btn-row no-print" style="margin:10px 0">
+    <button class="btn sm" data-act="vehCompartir" id="btnWa">${ICONS.wa} ${V.telefono ? 'WhatsApp al cliente' : 'Compartir'}</button>
+    <button class="btn sm" data-act="vehTramite">${ICONS.folder} Crear trámite</button>
+  </div>
+
+  <details class="card tc-pago no-print" id="tcPagoBox" ${UI.tcPagoAbierto ? 'open' : ''}>
+    <summary><b>⏱️ ¿Cuánto tarda en pagar una deuda?</b></summary>
+    <p class="small muted">Para explicar al cliente el costo de pagar solo el mínimo. Tasa y pago mínimo referenciales (Parámetros de productos).</p>
+    <div class="fields-2">
+      <div class="field"><label>Deuda (Bs)</label><input id="tcSaldo" inputmode="decimal" value="${esc(String(V.tcSaldo || limite).replace('.', ','))}"></div>
+      <div class="field"><label>Tasa % anual</label><input id="tcTasa" inputmode="decimal" value="${esc(String(V.tcTasa || P.tasa).replace('.', ','))}"></div>
+    </div>
+    <div class="field"><label>Pago mensual (Bs)</label><input id="tcPago" inputmode="decimal" value="${esc(String(V.tcPago || pago).replace('.', ','))}">
+      <div class="hint">Pago mínimo (${nf2.format(P.pagoMinimo || 5)}% de la deuda): Bs ${nf2.format(pagoMin)}</div></div>
+    <dl class="kv">
+      <dt>Pagando Bs ${nf2.format(pago)}</dt><dd>${txtMeses(r1)}</dd>
+      <dt>Pagando el doble (Bs ${nf2.format(pago * 2)})</dt><dd>${txtMeses(r2)}</dd>
+    </dl>
+  </details>
+  <p class="small muted">Cuota a considerar según la categoría de la tarjeta (parámetros protegidos). Evaluación referencial: aplica la normativa interna vigente.</p>`;
+  $('#simTel')?.addEventListener('input', e => {
+    V.telefono = e.target.value; guardarCalc();
+    const bw = $('#btnWa'); if (bw) bw.lastChild.textContent = ' ' + (V.telefono.trim() ? 'WhatsApp al cliente' : 'Compartir');
+  });
+  $('#tcPagoBox')?.addEventListener('toggle', e => { UI.tcPagoAbierto = e.target.open; });
+  ['tcSaldo', 'tcTasa', 'tcPago'].forEach(id => $('#' + id)?.addEventListener('change', e => {
+    V[id] = e.target.value; if (id === 'tcSaldo') V.tcPago = ''; guardarCalc(); vehCalc();
+  }));
+  vehCalc.ultimo = { V: { ...V }, tarjeta: true, monto: limite, c1: { total: cuota }, cVar: null, plazo: '', cat, maxCat, k };
+}
+function compartirTarjeta(u) {
+  const st = S().settings;
+  const text = `*Propuesta de tarjeta de crédito* (${fmtDate(today())})
+${u.V.nombre ? 'Cliente: ' + u.V.nombre + '\n' : ''}Tarjeta: ${u.cat.nombre}
+Límite: Bs ${nf2.format(u.monto)}
+Sujeto a evaluación y aprobación.
+${st.ejecutivo || ''} - Banco Mercantil Santa Cruz${st.telefonoEjecutivo ? `\nCel. ${st.telefonoEjecutivo}` : ''}`;
+  const tel = ($('#simTel')?.value || vehState().telefono || '').trim();
+  if (phoneDigits(tel).length >= 8) window.open(waLink(tel, text), '_blank');
+  else if (navigator.share) navigator.share({ text }).catch(() => {});
+  else window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+}
+
 /* ---------------- Enlace con la app ---------------- */
 ROUTES.calculadora.render = () => vehForm() + `<p class="small muted center no-print">Cálculos referenciales. Aplica siempre la normativa interna vigente del banco.</p>`;
 ROUTES.calculadora.after = () => {
   const V = vehState();
-  $('#pageTitle').textContent = esConsumo(V) ? 'Simulador de consumo' : 'Simulador vehicular';
+  $('#pageTitle').textContent = PRODUCTO_TXT[productoDe(V)][2];
   const form = $('#vehForm');
   if (!form) return;
   $('#simsHist')?.addEventListener('toggle', e => { UI.simsAbierto = e.target.open; });
@@ -801,10 +950,12 @@ Object.assign(ACTIONS, {
   },
   vehPDF: () => { const u = vehCalc.ultimo; if (u) compartirPropuestaPDF({ ...u, V: { ...u.V, boletas: vehState().boletas } }); },
   vehBoletas: el => { vehState().boletas = el.value; guardarCalc(); },
+  vehTcMax: el => { vehState().tcLimite = el.dataset.v; guardarCalc(); render(); },
   vehUsarMax: el => { const V = vehState(); V[esConsumo(V) ? 'montoCons' : 'compra'] = el.dataset.v.replace('.', ','); guardarCalc(); render(); },
   vehDeudaDel: el => { vehState().deudas.splice(+el.dataset.i, 1); guardarCalc(); render(); },
   vehCompartir: () => {
     const u = vehCalc.ultimo; if (!u) return;
+    if (u.tarjeta) return compartirTarjeta(u);
     const m = 'BOB';
     const text = `*Propuesta de crédito ${u.consumo ? 'de consumo' : 'vehicular'}* (${fmtDate(today())})
 ${u.V.nombre ? 'Cliente: ' + u.V.nombre + '\n' : ''}${u.consumo ? '' : `Vehículo ${u.V.estado === 'usado' ? 'usado' : 'nuevo'} (${u.V.motor === 'hibrido' ? 'eléctrico/híbrido' : 'a gasolina'}) · valor $us ${nf2.format(u.valorUsd)} = ${fmt(u.valor, m)} (TC ${nf2.format(u.tcVeh)})\n`}Monto a financiar: ${fmt(u.monto, m)}
@@ -821,6 +972,7 @@ ${S().settings.ejecutivo || ''} - Banco Mercantil Santa Cruz${S().settings.telef
   },
   vehTramite: () => {
     const u = vehCalc.ultimo; if (!u) return;
+    if (u.tarjeta) return caseForm({}, { tipo: 'tarjeta', monto: u.monto, moneda: 'BOB', prospecto: u.V.nombre, destino: `Tarjeta ${u.cat ? u.cat.nombre : ''}` });
     caseForm({}, { tipo: u.consumo ? 'consumo' : 'vehicular', monto: Math.round(u.monto * 100) / 100, moneda: 'BOB', tasa: num(u.V.tasaFija), plazo: u.plazo, prospecto: u.V.nombre, destino: u.consumo ? 'Consumo' : `Vehículo ${u.V.estado === 'usado' ? 'usado' : 'nuevo'}` });
   }
 });
