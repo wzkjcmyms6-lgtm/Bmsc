@@ -500,6 +500,7 @@ function bannerAcceso() {
 }
 function render() {
   pintarSub();
+  limpiarTelefonosDemo();
   const def = ROUTES[current.name];
   $('#view').innerHTML = bannerAcceso() + def.render(current.param);
   def.after && def.after();
@@ -1633,18 +1634,25 @@ function exportCSV() {
 /* =========================================================
    Datos de ejemplo
    ========================================================= */
+/* Datos de ejemplo: sin teléfonos (podrían ser números reales de otras personas)
+   ni carnets reales. Los clientes de ejemplo cargados antes pierden su teléfono. */
+const TEL_DEMO = { 'Carlos Gutiérrez Suárez': '71234567', 'María Fernanda Rojas Vaca': '76543210', 'Jorge Luis Mamani Quispe': '70011223', 'Ana Lucía Paz Méndez': '72233445', 'Luis Alberto Suárez Vaca': '77445566', 'Roberto Añez Justiniano': '69998877', 'Patricia Vargas Soliz': '75566778', 'Luis Fernando Ortiz': '78899001', 'Sofía Ribera': '70123123' };
+function limpiarTelefonosDemo() {
+  S().clients.forEach(c => { if (c.telefono && TEL_DEMO[c.nombre] === phoneDigits(c.telefono).slice(-8)) Store.upsertClient({ id: c.id, telefono: '' }); });
+  S().cases.forEach(k => { if (k.telefono && TEL_DEMO[k.prospecto] === phoneDigits(k.telefono).slice(-8)) Store.upsertCase({ ...k, telefono: '' }); });
+}
 function loadDemo() {
   if (S().clients.length && !confirm('Se agregarán clientes de ejemplo a tus datos actuales. ¿Continuar?')) return;
   const d = n => { const x = new Date(); x.setDate(x.getDate() + n); return isoDate(x); };
   const ago = n => d(-n);
   const people = [
-    ['Carlos Gutiérrez Suárez', '4839201', 'SC', '71234567', 'Profesional independiente', 'Arquitecto', [['vivienda', 'USD', 120000, 86000, 8.5, 240, ago(400), 15, 'vigente', 'Hipotecaria'], ['tarjeta', 'BOB', 15000, 6200, 24, 0, ago(200), 5, 'vigente', '']]],
-    ['María Fernanda Rojas Vaca', '6120458', 'SC', '76543210', 'Asalariado', 'Médica - CNS', [['vivienda_social', 'BOB', 650000, 598000, 5.5, 240, ago(300), 10, 'vigente', 'Hipotecaria']]],
-    ['Jorge Luis Mamani Quispe', '3928475', 'LP', '70011223', 'Independiente', 'Comerciante', [['consumo', 'BOB', 35000, 21000, 16, 24, ago(250), 20, 'mora', 'Personal']]],
-    ['Ana Lucía Paz Méndez', '7751203', 'CB', '72233445', 'Asalariado', 'Contadora', [['consumo', 'BOB', 60000, 22000, 13, 36, ago(700), 28, 'vigente', 'Personal'], ['vehicular', 'USD', 25000, 19500, 8.5, 60, ago(360), 3, 'vigente', 'Prendaria']]],
-    ['Luis Alberto Suárez Vaca', '3021456', 'SC', '77445566', 'Asalariado', 'Gerente financiero', [['vivienda', 'USD', 180000, 151000, 7.5, 300, ago(500), 30, 'vigente', 'Hipotecaria'], ['linea', 'BOB', 70000, 30000, 13, 36, ago(60), 12, 'vigente', 'Personal']]],
-    ['Roberto Añez Justiniano', '5567234', 'BE', '69998877', 'Independiente', 'Transporte', [['vehicular', 'BOB', 180000, 150000, 11, 60, ago(180), d(2).slice(8), 'vigente', 'Prendaria']]],
-    ['Patricia Vargas Soliz', '8834521', 'SC', '75566778', 'Asalariado', 'Docente', [['consumo', 'BOB', 25000, 24000, 14, 24, ago(30), d(4).slice(8), 'vigente', 'Personal']]]
+    ['Carlos Gutiérrez Suárez', 'EJ-001', 'SC', '', 'Profesional independiente', 'Arquitecto', [['vivienda', 'USD', 120000, 86000, 8.5, 240, ago(400), 15, 'vigente', 'Hipotecaria'], ['tarjeta', 'BOB', 15000, 6200, 24, 0, ago(200), 5, 'vigente', '']]],
+    ['María Fernanda Rojas Vaca', 'EJ-002', 'SC', '', 'Asalariado', 'Médica - CNS', [['vivienda_social', 'BOB', 650000, 598000, 5.5, 240, ago(300), 10, 'vigente', 'Hipotecaria']]],
+    ['Jorge Luis Mamani Quispe', 'EJ-003', 'LP', '', 'Independiente', 'Comerciante', [['consumo', 'BOB', 35000, 21000, 16, 24, ago(250), 20, 'mora', 'Personal']]],
+    ['Ana Lucía Paz Méndez', 'EJ-004', 'CB', '', 'Asalariado', 'Contadora', [['consumo', 'BOB', 60000, 22000, 13, 36, ago(700), 28, 'vigente', 'Personal'], ['vehicular', 'USD', 25000, 19500, 8.5, 60, ago(360), 3, 'vigente', 'Prendaria']]],
+    ['Luis Alberto Suárez Vaca', 'EJ-005', 'SC', '', 'Asalariado', 'Gerente financiero', [['vivienda', 'USD', 180000, 151000, 7.5, 300, ago(500), 30, 'vigente', 'Hipotecaria'], ['linea', 'BOB', 70000, 30000, 13, 36, ago(60), 12, 'vigente', 'Personal']]],
+    ['Roberto Añez Justiniano', 'EJ-006', 'BE', '', 'Independiente', 'Transporte', [['vehicular', 'BOB', 180000, 150000, 11, 60, ago(180), d(2).slice(8), 'vigente', 'Prendaria']]],
+    ['Patricia Vargas Soliz', 'EJ-007', 'SC', '', 'Asalariado', 'Docente', [['consumo', 'BOB', 25000, 24000, 14, 24, ago(30), d(4).slice(8), 'vigente', 'Personal']]]
   ];
   const ids = [];
   people.forEach(([nombre, ci, ext, tel, seg, act, credits], i) => {
@@ -1661,9 +1669,9 @@ function loadDemo() {
     Store.upsertCase({ clientId, prospecto, tipo, monto, moneda, etapa, prioridad, requisitos: req, tareas: [], bitacora: [{ fecha: new Date().toISOString(), t: 'Trámite de ejemplo creado.' }], actualizado: new Date().toISOString(), ...extra });
   };
   mk(ids[3], '', 'vivienda', 90000, 'USD', 'documentos', 5, 'alta', { fechaObjetivo: d(20), tasa: 7.5, plazo: 240, destino: 'Compra de departamento', tareas: [{ id: Store.uid(), t: 'Solicitar folio real actualizado', fecha: d(1), done: false }, { id: Store.uid(), t: 'Coordinar avalúo con perito', fecha: d(5), done: false }] });
-  mk(null, 'Luis Fernando Ortiz', 'consumo', 40000, 'BOB', 'prospecto', 1, 'media', { telefono: '78899001', tasa: 13, plazo: 36 });
+  mk(null, 'Luis Fernando Ortiz', 'consumo', 40000, 'BOB', 'prospecto', 1, 'media', { tasa: 13, plazo: 36 });
   mk(ids[0], '', 'linea', 50000, 'BOB', 'comite', 3, 'alta', { fechaObjetivo: d(7), destino: 'Línea de crédito personal', tasa: 13, plazo: 24 });
-  mk(null, 'Sofía Ribera', 'vehicular', 30000, 'USD', 'evaluacion', 6, 'media', { telefono: '70123123', tasa: 8.5, plazo: 60 });
+  mk(null, 'Sofía Ribera', 'vehicular', 30000, 'USD', 'evaluacion', 6, 'media', { tasa: 8.5, plazo: 60 });
   Store.upsertEvent({ tipo: 'visita', titulo: 'Visita de seguimiento', fecha: today(), hora: '10:00', clientId: ids[2] });
   Store.upsertEvent({ tipo: 'cobranza', titulo: 'Llamar por cuota atrasada', fecha: ago(1), hora: '', clientId: ids[2] });
   Store.upsertEvent({ tipo: 'reunion', titulo: 'Presentar línea de crédito en comité', fecha: d(3), hora: '15:00', clientId: ids[0] });
