@@ -358,6 +358,7 @@ const ROUTES = {
   'parametros': { title: 'Parámetros de productos', nav: 'mas', render: () => '', back: '#/mas' },
   'ajustes': { title: 'Ajustes', nav: 'mas', render: viewSettings, back: '#/mas' },
   'directorio': { title: 'Directorio de ejecutivos', nav: 'mas', render: viewDirectorio, back: '#/mas' },
+  'solicitudes': { title: 'Solicitudes de acceso', nav: 'mas', render: viewSolicitudes, back: '#/mas' },
   'respaldo': { title: 'Respaldo de datos', nav: 'mas', render: viewBackup, back: '#/mas' },
   'tipo-cambio': { title: 'Dólar oficial', nav: 'inicio', render: viewTC, back: '#/' },
   'historial': { title: 'Historial de cambios', nav: 'mas', render: viewHistorial, back: '#/mas' }
@@ -441,6 +442,10 @@ function viewDirectorio() {
 async function cargarDirectorio() {
   const box = $('#dirLista');
   if (!box) return;
+  if (window.Nube?.acceso && Nube.acceso !== 'aprobado') {
+    box.innerHTML = '<div class="card empty">El directorio se habilita cuando el administrador apruebe tu cuenta.</div>';
+    return;
+  }
   let lista;
   try { lista = await window.Nube.directorio(); }
   catch (e) {
@@ -463,10 +468,40 @@ async function cargarDirectorio() {
   $('#dirBuscar')?.addEventListener('input', pintar);
 }
 ROUTES.directorio.after = cargarDirectorio;
+
+/* ---------- Solicitudes de acceso (solo el administrador) ---------- */
+function viewSolicitudes() {
+  if (!window.Nube?.esAdmin) return '<div class="card empty">Solo el administrador puede ver esta sección.</div>';
+  const todas = Nube.solicitudes || [];
+  const grupo = (titulo, lista, botones) => lista.length ? `
+    <div class="section-title">${titulo} (${lista.length})</div>
+    <div class="card tight">${lista.map(x => `
+      <div class="list-item dir-item">
+        <div class="dir-foto"><span>${esc(iniciales(x.nombre) || String(x.usuario || '?').slice(-2))}</span></div>
+        <div class="grow"><div class="title">${esc(x.nombre || 'Sin nombre')}</div>
+          <div class="sub">${esc(['Usuario ' + (x.usuario || '—'), x.agencia, x.creado ? fmtDate(x.creado.slice(0, 10)) : ''].filter(Boolean).join(' · '))}</div></div>
+        <div class="sol-btns">${botones(x)}</div>
+      </div>`).join('')}</div>` : '';
+  const btn = (act, uid, txt, cls = '') => `<button type="button" class="btn sm ${cls}" data-act="${act}" data-uid="${esc(uid)}">${txt}</button>`;
+  return `
+  <p class="small muted" style="margin:0 2px 10px">Los ejecutivos se registran solos desde la pantalla de inicio de sesión (<b>Crear cuenta</b>). Hasta que los apruebes, pueden usar el simulador y su cartera, pero no ven el directorio ni los parámetros de la norma.</p>
+  ${grupo('Pendientes', todas.filter(x => x.estado === 'pendiente'), x => btn('solAprobar', x.uid, '✓ Aprobar', 'primary') + btn('solRechazar', x.uid, 'Rechazar', 'ghost'))}
+  ${grupo('Aprobados', todas.filter(x => x.estado === 'aprobado'), x => btn('solRechazar', x.uid, 'Quitar acceso', 'ghost'))}
+  ${grupo('Rechazados', todas.filter(x => x.estado === 'rechazado'), x => btn('solAprobar', x.uid, 'Aprobar', 'ghost'))}
+  ${todas.length ? '' : '<div class="card empty">Todavía no hay solicitudes.</div>'}`;
+}
+
+// Aviso para ejecutivos que se registraron y esperan la aprobación del administrador
+function bannerAcceso() {
+  const a = window.Nube?.acceso;
+  if (a === 'pendiente') return `<div class="card acceso-aviso">⏳ <b>Tu cuenta está pendiente de aprobación.</b> Ya puedes usar el simulador y tu cartera; el directorio de ejecutivos y los parámetros de la norma se habilitan cuando el administrador te apruebe.</div>`;
+  if (a === 'rechazado') return `<div class="card acceso-aviso rechazo">🚫 <b>Tu solicitud de acceso no fue aprobada.</b> Consulta con el administrador.</div>`;
+  return '';
+}
 function render() {
   pintarSub();
   const def = ROUTES[current.name];
-  $('#view').innerHTML = def.render(current.param);
+  $('#view').innerHTML = bannerAcceso() + def.render(current.param);
   def.after && def.after();
 }
 window.addEventListener('hashchange', route);
@@ -1417,6 +1452,7 @@ function viewMore() {
   return `
   <div class="section-title">Herramientas</div>
   <div class="card tight">
+    ${window.Nube?.esAdmin ? item('#/solicitudes', 'user', `Solicitudes de acceso${(() => { const n = (Nube.solicitudes || []).filter(x => x.estado === 'pendiente').length; return n ? ` <span class="badge red">${n}</span>` : ''; })()}`, 'Aprueba a los ejecutivos que se registran') : ''}
     ${item('#/directorio', 'users', 'Directorio de ejecutivos', 'Nombre, agencia y contacto de tus compañeros')}
     ${item('#/agenda', 'cal', 'Agenda', 'Llamadas, visitas, cobranza y cuotas próximas')}
     ${item('', 'book', 'Guías de crédito', 'Requisitos y consejos por tipo de crédito', 'openGuides')}
@@ -1883,3 +1919,19 @@ document.addEventListener('visibilitychange', () => {
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
+
+// Acciones del administrador (solicitudes de acceso)
+Object.assign(ACTIONS, {
+  solAprobar: async el => {
+    const x = (Nube.solicitudes || []).find(s => s.uid === el.dataset.uid); if (!x) return;
+    el.disabled = true;
+    try { await Nube.aprobar(x); toast(`${x.nombre || 'Usuario ' + x.usuario} aprobado`); }
+    catch (e) { el.disabled = false; toast(e.code === 'permission-denied' ? 'Sin permiso: publica la regla nueva en Firebase' : e.message); }
+  },
+  solRechazar: async el => {
+    const x = (Nube.solicitudes || []).find(s => s.uid === el.dataset.uid); if (!x) return;
+    if (!confirm(`¿Quitar el acceso de ${x.nombre || 'Usuario ' + x.usuario}?`)) return;
+    try { await Nube.rechazar(x); toast('Acceso quitado'); }
+    catch (e) { toast(e.code === 'permission-denied' ? 'Sin permiso: publica la regla nueva en Firebase' : e.message); }
+  }
+});

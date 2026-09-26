@@ -583,3 +583,9 @@ table.tbl.tabla-norma th { white-space: normal; line-height: 1.2; vertical-align
 .dir-foto img { width: 100%; height: 100%; object-fit: cover; }
 .dir-btn { flex: none; color: var(--green-600); }
 .brand-mark.avatar img[hidden], .brand-mark.avatar span[hidden] { display: none; }
+
+/* Aprobación de ejecutivos */
+.acceso-aviso { border-left: 4px solid var(--gold); font-size: 14px; }
+.acceso-aviso.rechazo { border-left-color: var(--red); }
+.sol-btns { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.lock-box .link { color: var(--green-600); font-weight: 650; }

@@ -1,23 +1,42 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Administrador de la app: carga las normas y aprueba a los ejecutivos que se registran
+    function esAdmin() {
+      return request.auth != null && request.auth.token.email == '17751@mi-cartera-bmsc.app';
+    }
+    // Ejecutivo aprobado por el administrador (o el administrador)
+    function aprobado() {
+      return request.auth != null
+        && (esAdmin() || exists(/databases/$(database)/documents/aprobados/$(request.auth.uid)));
+    }
+
     // Cada ejecutivo solo puede leer y escribir su propia cartera: usuarios/{su uid}/...
-    // Los usuarios se crean en Firebase → Authentication (el registro público está desactivado).
     match /usuarios/{uid}/{coleccion}/{id} {
       allow read, write: if request.auth != null
         && request.auth.uid == uid
         && coleccion in ['clientes', 'tramites', 'agenda', 'historial', 'simulaciones', 'perfil'];
     }
-    // Normas internas del banco (parámetros de la calculadora): las lee cualquier usuario con sesión,
-    // solo el administrador (17751) puede cargarlas o actualizarlas.
+    // Normas internas: solo ejecutivos aprobados las leen; solo el administrador las cambia
     match /config/{doc} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.token.email == '17751@mi-cartera-bmsc.app';
+      allow read: if aprobado();
+      allow write: if esAdmin();
     }
-    // Directorio de ejecutivos: todos los usuarios con sesión lo ven; cada uno solo edita su ficha
+    // Directorio: lo ven los aprobados; cada uno edita solo su ficha
     match /directorio/{uid} {
-      allow read: if request.auth != null;
+      allow read: if aprobado() || (request.auth != null && request.auth.uid == uid);
       allow write: if request.auth != null && request.auth.uid == uid;
+    }
+    // Solicitudes de acceso: el ejecutivo crea la suya (pendiente); el administrador las revisa
+    match /solicitudes/{uid} {
+      allow read: if esAdmin() || (request.auth != null && request.auth.uid == uid);
+      allow create: if request.auth != null && request.auth.uid == uid && request.resource.data.estado == 'pendiente';
+      allow update, delete: if esAdmin();
+    }
+    // Aprobados: solo el administrador los escribe
+    match /aprobados/{uid} {
+      allow read: if esAdmin() || (request.auth != null && request.auth.uid == uid);
+      allow write: if esAdmin();
     }
     // Cartera compartida anterior: solo el usuario 17751 puede leerla y borrarla,
     // para que la app la mueva a su cartera. Se puede quitar cuando esté vacía.

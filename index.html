@@ -31,6 +31,36 @@
       </div>
       <button id="loginBtn" class="btn primary block" type="submit">Ingresar</button>
       <p id="loginErr" class="error-text"></p>
+      <p class="small muted" style="margin:6px 0 0">¿Eres ejecutivo y no tienes cuenta? <a href="#" class="link" id="irRegistro">Crear cuenta</a></p>
+    </form>
+    <!-- Registro: el ejecutivo crea su usuario y queda pendiente de aprobación del administrador -->
+    <form id="registroForm" class="lock-box hidden" autocomplete="on">
+      <img class="logo-big" src="icons/icon.svg" alt="Mi Cartera">
+      <h1>Crear cuenta</h1>
+      <p class="muted">El administrador aprobará tu acceso</p>
+      <div class="field" style="text-align:left">
+        <label for="regUser">Usuario (tu código de ejecutivo)</label>
+        <input id="regUser" name="username" inputmode="numeric" autocomplete="username" required placeholder="Ej. 17752">
+      </div>
+      <div class="field" style="text-align:left">
+        <label for="regNombre">Nombre completo</label>
+        <input id="regNombre" autocomplete="name" required>
+      </div>
+      <div class="field" style="text-align:left">
+        <label for="regAgencia">Agencia / sucursal</label>
+        <input id="regAgencia" autocomplete="off" required>
+      </div>
+      <div class="field" style="text-align:left">
+        <label for="regPass">Clave (mínimo 6 caracteres)</label>
+        <input id="regPass" type="password" autocomplete="new-password" minlength="6" required>
+      </div>
+      <div class="field" style="text-align:left">
+        <label for="regPass2">Repite la clave</label>
+        <input id="regPass2" type="password" autocomplete="new-password" minlength="6" required>
+      </div>
+      <button id="regBtn" class="btn primary block" type="submit">Crear cuenta</button>
+      <p id="regErr" class="error-text"></p>
+      <p class="small muted" style="margin:6px 0 0"><a href="#" class="link" id="irLogin">Ya tengo cuenta: ingresar</a></p>
     </form>
   </div>
 

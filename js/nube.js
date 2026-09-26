@@ -30,6 +30,10 @@ const Nube = {
   historial: async () => [],
   normasEstado: '',         // '' | 'ok' | 'sin-permiso' | 'vacio'
   perfilEstado: '',         // '' | 'ok' | 'sin-permiso'
+  acceso: '',               // '' | 'aprobado' | 'pendiente' | 'rechazado' (aprobación del administrador)
+  esAdmin: false,
+  solicitudes: [],          // solo el administrador: solicitudes de acceso
+  aprobar: async () => {}, rechazar: async () => {}, quitarAcceso: async () => {},
   guardarPerfil: async () => {},
   guardarNormas: async () => { throw new Error('Inicia sesión con internet para guardar'); },
   sincronizarTodo: async () => {},
@@ -228,8 +232,13 @@ const ERRORES = {
   'auth/invalid-email': 'Usuario no válido',
   'auth/too-many-requests': 'Demasiados intentos. Espera unos minutos.',
   'auth/network-request-failed': 'Sin conexión a internet',
-  'auth/unauthorized-domain': 'Este sitio no está autorizado en Firebase (Dominios autorizados)'
+  'auth/unauthorized-domain': 'Este sitio no está autorizado en Firebase (Dominios autorizados)',
+  'auth/email-already-in-use': 'Ese usuario ya tiene cuenta. Ingresa con tu clave.',
+  'auth/weak-password': 'La clave debe tener al menos 6 caracteres',
+  'auth/operation-not-allowed': 'El registro todavía no está habilitado. Pide al administrador que lo active.',
+  'auth/admin-restricted-operation': 'El registro todavía no está habilitado. Pide al administrador que lo active.'
 };
+const ADMIN = USUARIO_LEGADO; // el administrador de la app (carga normas y aprueba ejecutivos)
 
 function mostrarLogin(visible) {
   $id('login').classList.toggle('hidden', !visible);
@@ -252,6 +261,74 @@ $id('loginForm').addEventListener('submit', async ev => {
     btn.disabled = false; btn.textContent = 'Ingresar';
   }
 });
+
+/* ---------- Registro de ejecutivos (quedan pendientes de aprobación) ---------- */
+const verRegistro = si => { $id('loginForm').classList.toggle('hidden', si); $id('registroForm').classList.toggle('hidden', !si); };
+$id('irRegistro').addEventListener('click', ev => { ev.preventDefault(); verRegistro(true); setTimeout(() => $id('regUser').focus(), 50); });
+$id('irLogin').addEventListener('click', ev => { ev.preventDefault(); verRegistro(false); });
+$id('registroForm').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const err = $id('regErr'), btn = $id('regBtn');
+  const usuario = $id('regUser').value.trim(), nombre = $id('regNombre').value.trim(), agencia = $id('regAgencia').value.trim();
+  const clave = $id('regPass').value;
+  err.textContent = '';
+  if (!/^[\w.-]{3,}$/.test(usuario)) { err.textContent = 'Usuario no válido (solo números o letras, sin espacios)'; return; }
+  if (clave !== $id('regPass2').value) { err.textContent = 'Las claves no coinciden'; return; }
+  if (!auth) { err.textContent = 'Conectando… intenta en unos segundos'; return; }
+  btn.disabled = true; btn.textContent = 'Creando cuenta…';
+  // Se guardan antes de crear la cuenta: al iniciar la sesión se envían con la solicitud
+  registroPendiente = { usuario, nombre, agencia };
+  try {
+    await authMod.createUserWithEmailAndPassword(auth, correoDe(usuario), clave);
+    $id('regPass').value = $id('regPass2').value = '';
+    document.activeElement?.blur();
+    verRegistro(false);
+  } catch (e) {
+    registroPendiente = null;
+    err.textContent = ERRORES[e.code] || e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Crear cuenta';
+  }
+});
+let registroPendiente = null;
+
+/* ---------- Aprobación del administrador ----------
+   aprobados/{uid} existe → el ejecutivo ve el directorio y las normas. solicitudes/{uid} guarda el pedido. */
+function escucharAcceso(user) {
+  Nube.esAdmin = (user.email || '').toLowerCase() === ADMIN;
+  if (Nube.esAdmin) { Nube.acceso = 'aprobado'; escucharSolicitudes(); return; }
+  let aprobado = null, solicitud;
+  const actualizar = () => {
+    if (aprobado === null || solicitud === undefined) return;
+    const antes = Nube.acceso;
+    Nube.acceso = aprobado ? 'aprobado' : solicitud?.estado === 'rechazado' ? 'rechazado' : 'pendiente';
+    // Sin solicitud (usuario creado antes o registro recién hecho): se envía una
+    if (!aprobado && !solicitud) {
+      const st = Store.get().settings, r = registroPendiente || {};
+      fs.setDoc(fs.doc(db, 'solicitudes', uidActual), limpio({
+        usuario: Nube.usuario, nombre: r.nombre || st.ejecutivo || '', agencia: r.agencia || st.agencia || '',
+        estado: 'pendiente', creado: new Date().toISOString()
+      })).catch(e => console.warn('Solicitud', e.code || e.message));
+    }
+    if (antes !== Nube.acceso) {
+      if (antes && Nube.acceso === 'aprobado') { escuchar(); }  // recién aprobado: se leen normas y directorio
+      redibujar();
+    }
+  };
+  desuscribirAcceso.push(fs.onSnapshot(fs.doc(db, 'aprobados', uidActual), s => { aprobado = s.exists(); actualizar(); },
+    e => { console.warn('Aprobados', e.code || e.message); aprobado = false; actualizar(); }));
+  desuscribirAcceso.push(fs.onSnapshot(fs.doc(db, 'solicitudes', uidActual), s => { solicitud = s.exists() ? s.data() : null; actualizar(); },
+    e => { console.warn('Solicitud', e.code || e.message); solicitud = null; actualizar(); }));
+}
+function escucharSolicitudes() {
+  desuscribirAcceso.push(fs.onSnapshot(fs.collection(db, 'solicitudes'), snap => {
+    Nube.solicitudes = snap.docs.map(d => ({ uid: d.id, ...d.data() }))
+      .sort((a, b) => String(b.creado || '').localeCompare(String(a.creado || '')));
+    window.dispatchEvent(new CustomEvent('nube-solicitudes'));
+    redibujar();
+  }, e => console.warn('Solicitudes', e.code || e.message)));
+}
+let desuscribirAcceso = [];
 
 /* Mueve la cartera compartida anterior (raíz) a usuarios/{uid} del usuario original */
 async function migrarLegado(user) {
@@ -279,6 +356,8 @@ async function alIniciarSesion(user) {
     Store.clearLocal();
   }
   Store.get().settings.nubeUid = user.uid;
+  // Registro recién hecho: su nombre y agencia pasan a Ajustes (y a su perfil y ficha del directorio)
+  if (registroPendiente) Object.assign(Store.get().settings, { ejecutivo: registroPendiente.nombre, agencia: registroPendiente.agencia });
   Store.save();
   mostrarLogin(false);
   setEstado('conectando');
@@ -286,7 +365,9 @@ async function alIniciarSesion(user) {
     await migrarLegado(user);
     await fusionInicial();
     escuchar();
+    escucharAcceso(user);
     listo = true;
+    if (registroPendiente) { Nube.guardarPerfil().catch(() => {}); setTimeout(() => { registroPendiente = null; }, 5000); }
     // Directorio: el ejecutivo queda registrado con su usuario apenas inicia sesión (sin tocar sus otros datos)
     fs.setDoc(fs.doc(db, 'directorio', uidActual), { usuario: Nube.usuario, ultimoIngreso: new Date().toISOString() }, { merge: true })
       .catch(e => console.warn('Directorio', e.code || e.message));
@@ -299,6 +380,9 @@ async function alIniciarSesion(user) {
 }
 
 function alCerrarSesion() {
+  desuscribirAcceso.forEach(f => f());
+  desuscribirAcceso = [];
+  Nube.acceso = ''; Nube.esAdmin = false; Nube.solicitudes = [];
   listo = false;
   uidActual = null;
   desuscribir.forEach(f => f());
@@ -355,6 +439,15 @@ async function iniciar() {
       nombre: p.ejecutivo, agencia: p.agencia, telefono: p.telefonoEjecutivo, foto: p.foto, usuario: Nube.usuario, actualizado: ahora
     }), { merge: true }).catch(e => console.warn('Directorio', e.code || e.message));
   };
+  Nube.aprobar = async x => {
+    await fs.setDoc(fs.doc(db, 'aprobados', x.uid), limpio({ usuario: x.usuario || '', nombre: x.nombre || '', aprobado: new Date().toISOString(), por: Nube.usuario }));
+    await fs.setDoc(fs.doc(db, 'solicitudes', x.uid), { estado: 'aprobado', revisado: new Date().toISOString() }, { merge: true });
+  };
+  Nube.rechazar = async x => {
+    await fs.deleteDoc(fs.doc(db, 'aprobados', x.uid)).catch(() => {});
+    await fs.setDoc(fs.doc(db, 'solicitudes', x.uid), { estado: 'rechazado', revisado: new Date().toISOString() }, { merge: true });
+  };
+  Nube.quitarAcceso = Nube.rechazar;
   Nube.directorio = async () => {
     if (!uidActual) throw new Error('Inicia sesión');
     const snap = await fs.getDocs(fs.collection(db, 'directorio'));

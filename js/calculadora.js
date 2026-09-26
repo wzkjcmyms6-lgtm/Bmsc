@@ -678,7 +678,8 @@ function normasCard() {
       ? `✅ Norma de endeudamiento cargada${n.version ? ' · versión ' + esc(n.version) : ''}${n.vigencia ? ' · vigente desde ' + esc(fmtDate(n.vigencia)) : ''}`
       : '⚠️ La norma de endeudamiento no está cargada en este dispositivo.'}</div>
     <div class="small" style="margin-top:4px">${tc ? `✅ Tarjetas de crédito: ${Object.keys(tc.categorias || {}).length} categorías cargadas` : '⚠️ Los parámetros de tarjetas de crédito no están cargados.'}</div>
-    ${estado === 'sin-permiso' ? '<div class="small" style="color:var(--red);margin-top:4px">Firebase no permite leer las normas: falta publicar la regla de «config».</div>' : ''}
+    ${window.Nube?.acceso === 'pendiente' ? '<div class="small" style="margin-top:4px">⏳ Las normas se habilitan cuando el administrador apruebe tu cuenta.</div>'
+      : estado === 'sin-permiso' ? '<div class="small" style="color:var(--red);margin-top:4px">Firebase no permite leer las normas: falta publicar la regla nueva.</div>' : ''}
     <div class="small muted" style="margin-top:6px">Se guardan en la nube (no en el código de la app) y solo se ven después de iniciar sesión. Al cerrar sesión se borran del dispositivo.</div>
     <details style="margin-top:8px"><summary class="link" style="cursor:pointer">Cargar o actualizar (solo administrador)</summary>
       <div class="field" style="margin-top:8px"><label for="normasTxt">Código de parámetros</label>
