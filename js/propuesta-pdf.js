@@ -78,7 +78,7 @@ function generarPropuestaPDF(u) {
   fuente('normal', 9, doradoSuave); doc.text('BANCO MERCANTIL SANTA CRUZ', xTit, 16, { charSpace: 0.6 });
   fuente('bold', 19, [255, 255, 255]); doc.text('Propuesta de crédito', xTit, 27);
   fuente('normal', 11, [226, 240, 233]); doc.text('Crédito de consumo', xTit, 34.5);
-  fuente('normal', 9, [226, 240, 233]); doc.text(fmtDate(today()), W - M, 16, { align: 'right' });
+  fuente('bold', 11, [255, 255, 255]); doc.text(fmtDate(today()), W - M, 16.5, { align: 'right' });
 
   // ---------- Cliente ----------
   let y = 58;
