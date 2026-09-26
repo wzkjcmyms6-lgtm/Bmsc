@@ -119,6 +119,7 @@ function ingresoPersona(V, p, titulo, extra = '') {
     <div class="veh-persona">
       <div class="veh-persona-head"><b>${titulo}</b>${extra}</div>
       <div style="margin-bottom:10px">${opciones('tipo' + p, tipo, TIPOS_INGRESO)}</div>
+      ${esConsumo(V) && tipo === 'sueldo' ? `<div class="veh-row" style="margin:0 0 10px"><div><span>¿Es funcionario público?</span><div class="small muted">Si no lo es, no lleva seguro de Cesantía</div></div>${siNo('publico' + p, V['publico' + p] || 'si')}</div>` : ''}
       <div class="fields-2">
         ${field({ label: ETIQ_MONTO[tipo], name: 'monto' + p, type: 'money', value: V['monto' + p] })}
         ${field({ label: 'Descuentos / impuestos (opcional)', name: 'otros' + p, type: 'money', value: V['otros' + p], placeholder: '0,00' })}
@@ -577,19 +578,22 @@ function vehCalc() {
   // capacidad de pago (sección 6). La cuota (capital + interés + seguros) es proporcional al monto,
   // así que se calcula la cuota de Bs 100.000 y se escala.
   // Cesantía (solo consumo): 0,84% anual por persona. Se aplica sola a quien registra ingresos (titular y,
-  // si tiene ingresos, también el codeudor). Con sueldo es obligatoria; con jubilación o ingreso del
-  // exterior viene marcada pero el ejecutivo la puede quitar (queda recordado en cesTNo / cesCNo).
+  // si tiene ingresos, también el codeudor). Con sueldo es obligatoria, salvo que no sea funcionario público
+  // (entonces no aplica); con jubilación o ingreso del exterior viene marcada pero el ejecutivo la puede
+  // quitar (queda recordado en cesTNo / cesCNo).
   const conIngT = num(V.montoT) > 0, conIngC = conCodeudor && V.ingC === 'si' && num(V.montoC) > 0;
-  const cesOblig = { T: V.tipoT === 'sueldo', C: V.tipoC === 'sueldo' };
+  const noPublico = { T: V.tipoT === 'sueldo' && V.publicoT === 'no', C: V.tipoC === 'sueldo' && V.publicoC === 'no' };
+  const cesOblig = { T: V.tipoT === 'sueldo' && !noPublico.T, C: V.tipoC === 'sueldo' && !noPublico.C };
   if (consumo) {
     [['T', conIngT], ['C', conIngC]].forEach(([p, conIng]) => {
-      const name = 'ces' + p, on = conIng && (cesOblig[p] || V[name + 'No'] !== 'si');
+      const name = 'ces' + p, on = conIng && !noPublico[p] && (cesOblig[p] || V[name + 'No'] !== 'si');
       V[name] = on ? 'si' : '';
       const el = $(`#vehForm input[name=${name}]`);
       if (el) {
-        el.checked = on; el.disabled = !conIng || cesOblig[p];
+        const activo = conIng && !noPublico[p];
+        el.checked = on; el.disabled = !activo || cesOblig[p];
         const lab = el.closest('.chk');
-        lab.classList.toggle('off', !conIng); lab.classList.toggle('fijo', conIng && cesOblig[p]);
+        lab.classList.toggle('off', !activo); lab.classList.toggle('fijo', activo && cesOblig[p]);
       }
     });
   }
@@ -600,14 +604,13 @@ function vehCalc() {
   const ci = $('#cesInfo');
   if (ci) {
     const TIPO_OPC = { jubilacion: 'jubilación', exterior: 'ingreso del exterior' };
-    const con = [conIngT && ['titular', 'T'], conIngC && ['codeudor', 'C']].filter(Boolean);
-    const opc = con.filter(([, p]) => !cesOblig[p]);
-    const regla = !con.length || !opc.length ? 'Obligatorio'
-      : opc.length === con.length ? `Opcional (${[...new Set(opc.map(([, p]) => TIPO_OPC[V['tipo' + p]]))].join(' / ')})`
-      : null;
-    const mixto = regla === null
-      ? `${con.map(([q, p]) => `${q[0].toUpperCase() + q.slice(1)} ${cesOblig[p] ? 'obligatorio' : `opcional (${TIPO_OPC[V['tipo' + p]]})`}`).join(' · ')}${ces ? ` · ${pct3(ces)}% anual (${mensual(ces)}% mensual)` : ''}` : '';
-    ci.textContent = mixto || (ces ? `${regla} · ${cesTxt}` : con.length ? `${regla} · no incluido` : `Obligatorio · ${pct3(VEH.cesantia)}% anual por persona · se aplica al registrar los ingresos`);
+    const estado = p => noPublico[p] ? 'no aplica (no es funcionario público)' : cesOblig[p] ? 'obligatorio' : `opcional (${TIPO_OPC[V['tipo' + p]]})`;
+    const may = t => t[0].toUpperCase() + t.slice(1);
+    const con = [conIngT && ['Titular', 'T'], conIngC && ['Codeudor', 'C']].filter(Boolean);
+    const estados = [...new Set(con.map(([, p]) => estado(p)))];
+    ci.textContent = !con.length ? `Obligatorio · ${pct3(VEH.cesantia)}% anual por persona · se aplica al registrar los ingresos`
+      : estados.length === 1 ? `${may(estados[0])}${ces ? ' · ' + cesTxt : noPublico[con[0][1]] ? '' : ' · no incluido'}`
+      : `${con.map(([q, p]) => `${q} ${estado(p)}`).join(' · ')}${ces ? ` · ${pct3(ces)}% anual (${mensual(ces)}% mensual)` : ''}`;
   }
   const segMensual = (desg + dima + ces) / VEH.periodoSeguros; // % mensual sobre saldo
   const planDe = mto => generarPlan({ monto: mto, n: plazo, tasa: num(V.tasaFija), sistema: 'frances', gracia: 0, mesesFijos: fijo < plazo ? fijo : 0, tasaVar, desg: segMensual, seguroMes: 0, fecha: today() });
