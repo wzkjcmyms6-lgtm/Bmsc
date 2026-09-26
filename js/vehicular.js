@@ -572,14 +572,21 @@ function vehCalc() {
   // Monto máximo (sección 7): la cuota más alta del crédito no puede pasar la cuota máxima que deja la
   // capacidad de pago (sección 6). La cuota (capital + interés + seguros) es proporcional al monto,
   // así que se calcula la cuota de Bs 100.000 y se escala.
-  // Cesantía (solo consumo): obligatoria, 0,84% anual por persona. Se aplica sola a quien registra ingresos
-  // (titular y, si tiene ingresos, también el codeudor); el ejecutivo no puede quitarla.
+  // Cesantía (solo consumo): 0,84% anual por persona. Se aplica sola a quien registra ingresos (titular y,
+  // si tiene ingresos, también el codeudor). Con sueldo es obligatoria; con jubilación o ingreso del
+  // exterior viene marcada pero el ejecutivo la puede quitar (queda recordado en cesTNo / cesCNo).
   const conIngT = num(V.montoT) > 0, conIngC = conCodeudor && V.ingC === 'si' && num(V.montoC) > 0;
+  const cesOblig = { T: V.tipoT === 'sueldo', C: V.tipoC === 'sueldo' };
   if (consumo) {
-    [['cesT', conIngT], ['cesC', conIngC]].forEach(([name, on]) => {
+    [['T', conIngT], ['C', conIngC]].forEach(([p, conIng]) => {
+      const name = 'ces' + p, on = conIng && (cesOblig[p] || V[name + 'No'] !== 'si');
       V[name] = on ? 'si' : '';
       const el = $(`#vehForm input[name=${name}]`);
-      if (el) { el.checked = on; el.disabled = true; el.closest('.chk').classList.toggle('off', !on); }
+      if (el) {
+        el.checked = on; el.disabled = !conIng || cesOblig[p];
+        const lab = el.closest('.chk');
+        lab.classList.toggle('off', !conIng); lab.classList.toggle('fijo', conIng && cesOblig[p]);
+      }
     });
   }
   const cesQuien = consumo ? [V.cesT === 'si' && conIngT, V.cesC === 'si' && conIngC] : [false, false];
@@ -587,7 +594,17 @@ function vehCalc() {
   const ces = nCes * VEH.cesantia;
   const cesTxt = ces ? `${quien(cesQuien[0], cesQuien[1])} · ${pct3(ces)}% anual (${mensual(ces)}% mensual)` : '';
   const ci = $('#cesInfo');
-  if (ci) ci.textContent = ces ? `Obligatorio · ${cesTxt}` : `Obligatorio · ${pct3(VEH.cesantia)}% anual por persona · se aplica al registrar los ingresos`;
+  if (ci) {
+    const TIPO_OPC = { jubilacion: 'jubilación', exterior: 'ingreso del exterior' };
+    const con = [conIngT && ['titular', 'T'], conIngC && ['codeudor', 'C']].filter(Boolean);
+    const opc = con.filter(([, p]) => !cesOblig[p]);
+    const regla = !con.length || !opc.length ? 'Obligatorio'
+      : opc.length === con.length ? `Opcional (${[...new Set(opc.map(([, p]) => TIPO_OPC[V['tipo' + p]]))].join(' / ')})`
+      : null;
+    const mixto = regla === null
+      ? `${con.map(([q, p]) => `${q[0].toUpperCase() + q.slice(1)} ${cesOblig[p] ? 'obligatorio' : `opcional (${TIPO_OPC[V['tipo' + p]]})`}`).join(' · ')}${ces ? ` · ${pct3(ces)}% anual (${mensual(ces)}% mensual)` : ''}` : '';
+    ci.textContent = mixto || (ces ? `${regla} · ${cesTxt}` : con.length ? `${regla} · no incluido` : `Obligatorio · ${pct3(VEH.cesantia)}% anual por persona · se aplica al registrar los ingresos`);
+  }
   const segMensual = (desg + dima + ces) / VEH.periodoSeguros; // % mensual sobre saldo
   const planDe = mto => generarPlan({ monto: mto, n: plazo, tasa: num(V.tasaFija), sistema: 'frances', gracia: 0, mesesFijos: fijo < plazo ? fijo : 0, tasaVar, desg: segMensual, seguroMes: 0, fecha: today() });
   const cuotaMaxDe = pl => Math.max(pl.rows[0].total, fijo < plazo ? pl.rows[fijo].total : 0);
@@ -974,6 +991,8 @@ ROUTES.calculadora.after = () => {
       else V[k] = v;
     });
     $$('input[type=checkbox]', form).forEach(ch => { V[ch.name] = ch.checked ? 'si' : ''; });
+    // Cesantía opcional (jubilación / exterior): recordar si el ejecutivo la quitó
+    if (e.target.name === 'cesT' || e.target.name === 'cesC') V[e.target.name + 'No'] = e.target.checked ? '' : 'si';
     if (e.target.name === 'periodoFijo') {
       const entero = String(Math.max(0, parseInt(String(V.periodoFijo), 10) || 0));
       if (entero !== String(V.periodoFijo)) { V.periodoFijo = entero; e.target.value = entero; }
