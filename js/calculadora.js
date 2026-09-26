@@ -103,10 +103,25 @@ function simDefaults(id) {
     fecha: today(), diaPago: '', esVIS: false, tipoInmueble: 'casa', condicion: 'nuevo', verPlan: false
   };
 }
+// Cada usuario tiene su propia calculadora en el dispositivo (aunque compartan celular)
+const CALC_LEGADO = 'mc_calc';
+const claveCalc = () => { const u = Store.get().settings.nubeUid; return u ? `${CALC_LEGADO}_${u}` : CALC_LEGADO; };
+function leerCalcGuardada(clave) {
+  let raw = localStorage.getItem(clave);
+  // Versión anterior (una sola calculadora por celular): pasa al usuario que la estaba usando
+  if (raw === null && clave !== CALC_LEGADO) {
+    raw = localStorage.getItem(CALC_LEGADO);
+    if (raw !== null) { localStorage.setItem(clave, raw); localStorage.removeItem(CALC_LEGADO); }
+  }
+  return JSON.parse(raw || 'null');
+}
 function calcState() {
+  const clave = claveCalc();
+  if (UI.calc && UI.calcClave !== clave) { UI.calc = null; UI.simsAbierto = false; }   // cambió el usuario
   if (!UI.calc) {
     let guardado = null;
-    try { guardado = JSON.parse(localStorage.getItem('mc_calc') || 'null'); } catch { /* sin almacenamiento */ }
+    try { guardado = leerCalcGuardada(clave); } catch { /* sin almacenamiento */ }
+    UI.calcClave = clave;
     UI.calc = guardado || {};
     UI.calc.tab = UI.calc.tab || 'simulador';
     UI.calc.sim = UI.calc.sim && SIM_PRODUCTOS.includes(UI.calc.sim.producto) ? UI.calc.sim : simDefaults('consumo');
@@ -117,7 +132,7 @@ function calcState() {
   }
   return UI.calc;
 }
-function guardarCalc() { try { localStorage.setItem('mc_calc', JSON.stringify(UI.calc)); } catch { /* sin almacenamiento */ } }
+function guardarCalc() { try { if (UI.calc) localStorage.setItem(UI.calcClave || claveCalc(), JSON.stringify(UI.calc)); } catch { /* sin almacenamiento */ } }
 const fmt = (n, m = 'BOB') => money(n, m);
 const leerForm = (form, obj) => {
   Object.entries(formData(form)).forEach(([k, v]) => { obj[k] = v; });

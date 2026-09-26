@@ -370,6 +370,7 @@ async function alIniciarSesion(user) {
   const tieneDatos = st.clients.length || st.cases.length || st.agenda.length;
   if (tieneDatos && ((dueño && dueño !== user.uid) || (!dueño && (user.email || '').toLowerCase() !== USUARIO_LEGADO))) {
     Store.clearLocal();
+    try { localStorage.removeItem('mc_calc'); } catch { /* sin almacenamiento */ }
   }
   Store.get().settings.nubeUid = user.uid;
   // Registro recién hecho: su nombre y agencia pasan a Ajustes (y a su perfil y ficha del directorio)
@@ -491,6 +492,7 @@ async function iniciar() {
     alCerrarSesion();
     // No dejar datos de clientes en el dispositivo después de salir
     Store.clearLocal();
+    try { localStorage.removeItem('mc_calc'); } catch { /* sin almacenamiento */ }
     const st = Store.get(); st.settings.nubeFusionada = null; Store.save();
     location.hash = '#/';
     if (typeof window.render === 'function') window.render();
