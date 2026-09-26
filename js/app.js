@@ -535,11 +535,13 @@ function viewSolicitudes() {
         <div class="sol-btns">${botones(x)}</div>
       </div>`).join('')}</div>` : '';
   const btn = (act, uid, txt, cls = '') => `<button type="button" class="btn sm ${cls}" data-act="${act}" data-uid="${esc(uid)}">${txt}</button>`;
+  // Eliminar (solo el administrador ve esta sección): borra la solicitud, el acceso y la ficha del directorio
+  const del = x => x.usuario === Nube.usuario ? '' : `<button type="button" class="btn sm ghost sol-del" data-act="solEliminar" data-uid="${esc(x.uid)}">Eliminar</button>`;
   return `
   <p class="small muted" style="margin:0 2px 10px">Los ejecutivos se registran solos desde la pantalla de inicio de sesión (<b>Crear cuenta</b>). Hasta que los apruebes, pueden usar el simulador y su cartera, pero no ven el directorio ni los parámetros de la norma.</p>
-  ${grupo('Pendientes', todas.filter(x => x.estado === 'pendiente'), x => btn('solAprobar', x.uid, '✓ Aprobar', 'primary') + btn('solRechazar', x.uid, 'Rechazar', 'ghost'))}
-  ${grupo('Aprobados', todas.filter(x => x.estado === 'aprobado'), x => btn('solAprobar', x.uid, 'Rol y equipo', 'ghost') + btn('solRechazar', x.uid, 'Quitar acceso', 'ghost'))}
-  ${grupo('Rechazados', todas.filter(x => x.estado === 'rechazado'), x => btn('solAprobar', x.uid, 'Aprobar', 'ghost'))}
+  ${grupo('Pendientes', todas.filter(x => x.estado === 'pendiente'), x => btn('solAprobar', x.uid, '✓ Aprobar', 'primary') + btn('solRechazar', x.uid, 'Rechazar', 'ghost') + del(x))}
+  ${grupo('Aprobados', todas.filter(x => x.estado === 'aprobado'), x => btn('solAprobar', x.uid, 'Rol y equipo', 'ghost') + btn('solRechazar', x.uid, 'Quitar acceso', 'ghost') + del(x))}
+  ${grupo('Rechazados', todas.filter(x => x.estado === 'rechazado'), x => btn('solAprobar', x.uid, 'Aprobar', 'ghost') + del(x))}
   ${todas.length ? '' : '<div class="card empty">Todavía no hay solicitudes.</div>'}`;
 }
 
@@ -1996,6 +1998,20 @@ Object.assign(ACTIONS, {
     if (!confirm(`¿Quitar el acceso de ${x.nombre || 'Usuario ' + x.usuario}?`)) return;
     try { await Nube.rechazar(x); toast('Acceso quitado'); }
     catch (e) { toast(e.code === 'permission-denied' ? 'Sin permiso: publica la regla nueva en Firebase' : e.message); }
+  },
+  solEliminar: el => {
+    if (!Nube.esAdmin) return;
+    const x = (Nube.solicitudes || []).find(s => s.uid === el.dataset.uid); if (!x) return;
+    openSheet('Eliminar usuario', `
+      <p style="margin-top:0">Se eliminará a <b>${esc(x.nombre || 'Sin nombre')}</b> (usuario ${esc(x.usuario || '—')}) de la app: su solicitud, su acceso y su ficha del directorio.</p>
+      <p class="small muted">Si su cuenta todavía existe en Firebase → Authentication, bórrala también ahí para que no pueda volver a entrar. Después podrá registrarse de nuevo con el mismo usuario.</p>
+      <button type="button" class="btn danger block" id="btnEliminarUsr">Eliminar</button>`, body => {
+      $('#btnEliminarUsr', body).addEventListener('click', async ev => {
+        ev.target.disabled = true;
+        try { await Nube.eliminarUsuario(x); closeSheet(); toast('Usuario eliminado'); }
+        catch (e) { ev.target.disabled = false; toast(e.code === 'permission-denied' ? 'Sin permiso: publica las reglas nuevas en Firebase' : e.message); }
+      });
+    });
   }
 });
 

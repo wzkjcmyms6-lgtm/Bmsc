@@ -590,6 +590,7 @@ table.tbl.tabla-norma th { white-space: normal; line-height: 1.2; vertical-align
 .acceso-aviso { border-left: 4px solid var(--gold); font-size: 14px; }
 .acceso-aviso.rechazo { border-left-color: var(--red); }
 .sol-btns { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.sol-btns .sol-del { color: var(--red); }
 .lock-box .link { color: var(--green-600); font-weight: 650; }
 
 /* Simulador de tarjeta */

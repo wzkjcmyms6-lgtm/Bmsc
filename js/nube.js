@@ -482,6 +482,13 @@ async function iniciar() {
     await fs.setDoc(fs.doc(db, 'solicitudes', x.uid), { estado: 'rechazado', revisado: new Date().toISOString() }, { merge: true });
   };
   Nube.quitarAcceso = Nube.rechazar;
+  // Solo el administrador: borra su acceso, su ficha del directorio y, al final, su solicitud
+  Nube.eliminarUsuario = async x => {
+    if (!Nube.esAdmin) throw new Error('Solo el administrador puede eliminar usuarios');
+    await fs.deleteDoc(fs.doc(db, 'aprobados', x.uid));
+    await fs.deleteDoc(fs.doc(db, 'directorio', x.uid));
+    await fs.deleteDoc(fs.doc(db, 'solicitudes', x.uid));
+  };
   Nube.directorio = async () => {
     if (!uidActual) throw new Error('Inicia sesión');
     const snap = await fs.getDocs(fs.collection(db, 'directorio'));
