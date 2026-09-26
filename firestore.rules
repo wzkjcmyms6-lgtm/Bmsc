@@ -6,7 +6,7 @@ service cloud.firestore {
     match /usuarios/{uid}/{coleccion}/{id} {
       allow read, write: if request.auth != null
         && request.auth.uid == uid
-        && coleccion in ['clientes', 'tramites', 'agenda', 'historial', 'simulaciones'];
+        && coleccion in ['clientes', 'tramites', 'agenda', 'historial', 'simulaciones', 'perfil'];
     }
     // Normas internas del banco (parámetros de la calculadora): las lee cualquier usuario con sesión,
     // solo el administrador (17751) puede cargarlas o actualizarlas.

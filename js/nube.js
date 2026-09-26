@@ -29,6 +29,8 @@ const Nube = {
   usuario: '',
   historial: async () => [],
   normasEstado: '',         // '' | 'ok' | 'sin-permiso' | 'vacio'
+  perfilEstado: '',         // '' | 'ok' | 'sin-permiso'
+  guardarPerfil: async () => {},
   guardarNormas: async () => { throw new Error('Inicia sesión con internet para guardar'); },
   sincronizarTodo: async () => {},
   cerrarSesion: async () => {}
@@ -144,8 +146,10 @@ let renderPendiente = null;
 function redibujar() {
   clearTimeout(renderPendiente);
   renderPendiente = setTimeout(() => {
+    const act = document.activeElement;
+    // Un campo con el foco dentro de algo oculto (p. ej. el inicio de sesión ya cerrado) no cuenta
     const ocupado = !document.getElementById('sheet').classList.contains('hidden') ||
-      ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
+      (['INPUT', 'TEXTAREA', 'SELECT'].includes(act?.tagName) && !act.closest('.hidden'));
     if (ocupado) return redibujar();
     if (typeof window.render === 'function') window.render();
   }, 300);
@@ -166,10 +170,33 @@ function escucharNormas() {
   }, err => { Nube.normasEstado = esPermiso(err) ? 'sin-permiso' : 'error'; console.warn('Normas', err.code || err.message); }));
 }
 
+/* Perfil del ejecutivo (nombre, agencia, teléfono y metas): se guarda en su cuenta
+   (usuarios/{uid}/perfil/datos) y aparece en cualquier dispositivo donde inicie sesión. */
+const CAMPOS_PERFIL = ['ejecutivo', 'agencia', 'telefonoEjecutivo', 'metaMensual', 'metaClientes'];
+const perfilLocal = () => Object.fromEntries(CAMPOS_PERFIL.map(k => [k, Store.get().settings[k] ?? '']));
+function escucharPerfil() {
+  desuscribir.push(fs.onSnapshot(ref('perfil', 'datos'), snap => {
+    if (snap.metadata.fromCache && !snap.exists()) return;
+    Nube.perfilEstado = 'ok';
+    if (!snap.exists()) {
+      // Primera vez: se sube lo que ya estaba en este dispositivo
+      const p = perfilLocal();
+      if (CAMPOS_PERFIL.some(k => p[k])) Nube.guardarPerfil().catch(() => {});
+      return;
+    }
+    const d = snap.data(), st = Store.get().settings;
+    if (CAMPOS_PERFIL.every(k => (st[k] ?? '') === (d[k] ?? ''))) return;
+    CAMPOS_PERFIL.forEach(k => { if (d[k] !== undefined) st[k] = d[k]; });
+    Store.save();
+    redibujar();
+  }, err => { Nube.perfilEstado = esPermiso(err) ? 'sin-permiso' : 'error'; console.warn('Perfil', err.code || err.message); }));
+}
+
 function escuchar() {
   desuscribir.forEach(f => f());
   desuscribir = [];
   escucharNormas();
+  escucharPerfil();
   for (const [key, nombre] of colsActivas()) {
     desuscribir.push(fs.onSnapshot(col(nombre), { includeMetadataChanges: true }, snap => {
       // Solo datos confirmados por el servidor (evita borrar la copia local con una caché vacía)
@@ -218,6 +245,7 @@ $id('loginForm').addEventListener('submit', async ev => {
   try {
     await authMod.signInWithEmailAndPassword(auth, correoDe($id('loginUser').value), $id('loginPass').value);
     $id('loginPass').value = '';
+    document.activeElement?.blur();
   } catch (e) {
     err.textContent = ERRORES[e.code] || e.message;
   } finally {
@@ -314,6 +342,10 @@ async function iniciar() {
   Nube.guardarNormas = async datos => {
     if (!uidActual) throw new Error('Inicia sesión para guardar');
     await fs.setDoc(fs.doc(db, 'config', 'normas'), limpio(datos));
+  };
+  Nube.guardarPerfil = async () => {
+    if (!uidActual) return;
+    await fs.setDoc(ref('perfil', 'datos'), limpio({ ...perfilLocal(), actualizado: new Date().toISOString() }));
   };
   Nube.sincronizarTodo = () => subirTodo({ reemplazar: false, accion: 'sincronizar' });
   Nube.cerrarSesion = async () => {

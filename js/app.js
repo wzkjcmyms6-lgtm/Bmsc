@@ -370,15 +370,20 @@ function route() {
   current = { name: r, param: param ? decodeURIComponent(param) : null };
   const def = ROUTES[r];
   $('#pageTitle').textContent = def.title;
-  const st = S().settings;
-  $('#pageSub').textContent = [st.ejecutivo, st.agencia].filter(Boolean).join(' · ') || 'Ejecutivo de cuenta · BMSC';
+  pintarSub();
   $('#backBtn').classList.toggle('hidden', !def.back);
   $$('.bottomnav a').forEach(a => a.classList.toggle('active', a.dataset.nav === def.nav));
   closeSheet();
   render();
   window.scrollTo(0, 0);
 }
+// Subtítulo de la barra superior: nombre y agencia del ejecutivo
+function pintarSub() {
+  const st = S().settings;
+  $('#pageSub').textContent = [st.ejecutivo, st.agencia].filter(Boolean).join(' · ') || 'Ejecutivo de cuenta · BMSC';
+}
 function render() {
+  pintarSub();
   const def = ROUTES[current.name];
   $('#view').innerHTML = def.render(current.param);
   def.after && def.after();
@@ -1410,7 +1415,10 @@ ROUTES.ajustes.after = () => {
       tcModo: d.tcModo === 'manual' && num(d.tc) ? 'manual' : 'auto', tcTipo: d.tcTipo || 'tco', tc: num(d.tc) || '',
       theme: d.theme || S().settings.theme
     });
-    Store.save(); applyTheme(); toast('Ajustes guardados'); location.hash = '#/';
+    Store.save(); applyTheme();
+    // Nombre, agencia, teléfono y metas quedan en la cuenta (se ven en cualquier dispositivo)
+    window.Nube?.guardarPerfil?.().catch(e => console.warn('Perfil', e));
+    toast('Ajustes guardados'); location.hash = '#/';
   });
 };
 
