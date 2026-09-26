@@ -94,7 +94,7 @@ const siNo = (name, value, labels = ['Sí', 'No']) => `
     <label><input type="radio" name="${name}" value="si" ${value === 'si' ? 'checked' : ''}><span>${labels[0]}</span></label>
     <label><input type="radio" name="${name}" value="no" ${value !== 'si' ? 'checked' : ''}><span>${labels[1]}</span></label>
   </div>`;
-const chk = (name, value, label) => `<label class="chk"><input type="checkbox" name="${name}" ${value === 'si' ? 'checked' : ''}><span>${label}</span></label>`;
+const chk = (name, value, label, clase = '') => `<label class="chk${clase ? ' ' + clase : ''}"><input type="checkbox" name="${name}" ${value === 'si' ? 'checked' : ''}><span>${label}</span></label>`;
 const opciones = (name, value, ops) => `
   <div class="seg-toggle" role="radiogroup">
     ${ops.map(([v, l]) => `<label><input type="radio" name="${name}" value="${v}" ${value === v ? 'checked' : ''}><span>${l}</span></label>`).join('')}
@@ -190,7 +190,7 @@ function vehForm() {
       <div class="veh-row veh-seg"><div><span>Seguro DIMA</span><div class="small muted" id="dimaInfo"></div></div>
         <div class="chk-group">${chk('dimaT', V.dimaT, 'Titular')}${V.codeudor === 'si' ? chk('dimaC', V.dimaC, 'Codeudor') : ''}</div></div>
       ${esConsumo(V) ? `<div class="veh-row veh-seg"><div><span>Seguro de Cesantía</span><div class="small muted" id="cesInfo"></div></div>
-        <div class="chk-group">${chk('cesT', V.cesT, 'Titular')}${V.codeudor === 'si' ? chk('cesC', V.cesC, 'Codeudor') : ''}</div></div>` : ''}
+        <div class="chk-group">${chk('cesT', V.cesT, 'Titular', 'fijo')}${V.codeudor === 'si' ? chk('cesC', V.cesC, 'Codeudor', 'fijo') : ''}</div></div>` : ''}
     `)}
 
     ${esTarjeta(V) ? '' : seccion(3, 'Condiciones', `
@@ -572,15 +572,22 @@ function vehCalc() {
   // Monto máximo (sección 7): la cuota más alta del crédito no puede pasar la cuota máxima que deja la
   // capacidad de pago (sección 6). La cuota (capital + interés + seguros) es proporcional al monto,
   // así que se calcula la cuota de Bs 100.000 y se escala.
-  // Cesantía (solo consumo): 0,84% anual por persona asegurada; cada uno solo si tiene sus ingresos registrados
+  // Cesantía (solo consumo): obligatoria, 0,84% anual por persona. Se aplica sola a quien registra ingresos
+  // (titular y, si tiene ingresos, también el codeudor); el ejecutivo no puede quitarla.
   const conIngT = num(V.montoT) > 0, conIngC = conCodeudor && V.ingC === 'si' && num(V.montoC) > 0;
-  if (consumo) { ajusta('cesT', conIngT); ajusta('cesC', conIngC); }
+  if (consumo) {
+    [['cesT', conIngT], ['cesC', conIngC]].forEach(([name, on]) => {
+      V[name] = on ? 'si' : '';
+      const el = $(`#vehForm input[name=${name}]`);
+      if (el) { el.checked = on; el.disabled = true; el.closest('.chk').classList.toggle('off', !on); }
+    });
+  }
   const cesQuien = consumo ? [V.cesT === 'si' && conIngT, V.cesC === 'si' && conIngC] : [false, false];
   const nCes = cesQuien.filter(Boolean).length;
   const ces = nCes * VEH.cesantia;
   const cesTxt = ces ? `${quien(cesQuien[0], cesQuien[1])} · ${pct3(ces)}% anual (${mensual(ces)}% mensual)` : '';
   const ci = $('#cesInfo');
-  if (ci) ci.textContent = ces ? cesTxt : `${pct3(VEH.cesantia)}% anual por persona sobre saldo insoluto · solo para quien tiene ingresos registrados`;
+  if (ci) ci.textContent = ces ? `Obligatorio · ${cesTxt}` : `Obligatorio · ${pct3(VEH.cesantia)}% anual por persona · se aplica al registrar los ingresos`;
   const segMensual = (desg + dima + ces) / VEH.periodoSeguros; // % mensual sobre saldo
   const planDe = mto => generarPlan({ monto: mto, n: plazo, tasa: num(V.tasaFija), sistema: 'frances', gracia: 0, mesesFijos: fijo < plazo ? fijo : 0, tasaVar, desg: segMensual, seguroMes: 0, fecha: today() });
   const cuotaMaxDe = pl => Math.max(pl.rows[0].total, fijo < plazo ? pl.rows[fijo].total : 0);
