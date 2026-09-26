@@ -17,19 +17,35 @@ function cargarJsPDF() {
   return cargaJsPDF;
 }
 
-/* Requisitos del crédito de consumo (según quién participa en la simulación) */
-function requisitosConsumo(u) {
+/* Requisitos de la propuesta (según el tipo de crédito y quién participa):
+   - Consumo: CI, 3 o 6 boletas, firma de formularios.
+   - Todos: Reporte de movimientos de la Gestora y, si tiene otros créditos, su plan de pagos (por banco).
+   - Más los requisitos extra que añade el ejecutivo. */
+function requisitosPropuesta(u) {
   const V = u.V;
-  const conCod = V.codeudor === 'si';
+  const consumo = u.consumo;
+  const conCod = V.codeudor === 'si' && !u.tarjeta;
   const conIngC = conCod && V.ingC === 'si' && num(V.montoC) > 0;
   const n = V.boletas === '6' ? 6 : 3;
-  return [
-    `Fotocopia de CI ${conCod ? 'del titular y del codeudor' : 'del titular'}`,
-    `Últimas ${n} boletas de pago ${conIngC ? 'del titular y del codeudor' : 'del titular'}`,
-    'Firma de formularios',
-    ...(V.reqExtra || []).filter(Boolean)
-  ];
+  const r = [];
+  if (consumo) {
+    r.push(`Fotocopia de CI ${conCod ? 'del titular y del codeudor' : 'del titular'}`);
+    r.push(`Últimas ${n} boletas de pago ${conIngC ? 'del titular y del codeudor' : 'del titular'}`);
+  }
+  r.push('Reporte de movimientos de la Gestora');
+  // Plan de pagos de cada crédito vigente (las tarjetas no tienen plan de pagos)
+  const creditos = (V.deudas || []).filter(d => d.cod !== 'TC');
+  if (creditos.length) {
+    const bancos = [...new Set(creditos.map(d => String(d.banco || '').trim()).filter(Boolean))];
+    const sinBanco = creditos.some(d => !String(d.banco || '').trim());
+    r.push(bancos.length
+      ? `Plan de pagos de ${bancos.length > 1 ? 'sus créditos en ' + bancos.slice(0, -1).join(', ') + ' y ' + bancos.at(-1) : 'su crédito en ' + bancos[0]}${sinBanco ? ' (y de sus otros créditos)' : ''}`
+      : `Plan de pagos de sus otros créditos`);
+  }
+  if (consumo) r.push('Firma de formularios');
+  return [...r, ...(V.reqExtra || []).filter(Boolean)];
 }
+const requisitosConsumo = requisitosPropuesta;
 
 function generarPropuestaPDF(u) {
   const { jsPDF } = window.jspdf;

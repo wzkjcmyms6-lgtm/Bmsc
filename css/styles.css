@@ -602,3 +602,5 @@ table.tbl.tabla-norma th { white-space: normal; line-height: 1.2; vertical-align
 .req-extra-tit { font-weight: 600; }
 .req-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .req-lista li { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 6px 4px 6px 10px; font-size: 14px; }
+.deuda-banco { width: 100%; margin-top: 6px; padding: 9px 12px; border-radius: 11px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font-size: 15px; font-family: inherit; }
+.req-lista li.auto { background: transparent; border-style: dashed; padding: 6px 10px; }

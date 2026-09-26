@@ -245,12 +245,14 @@ function vehForm() {
               : `<input name="d_${i}_cuota" type="text" inputmode="decimal" placeholder="0,00" value="${esc(d.cuota || '')}">`}
             <button type="button" class="icon-btn deuda-del" data-act="vehDeudaDel" data-i="${i}" aria-label="Quitar">${ICONS.x}</button>
           </div>
+          ${d.cod !== 'TC' ? `<input class="deuda-banco" name="d_${i}_banco" type="text" list="bancosBo" autocomplete="off" placeholder="Banco o entidad (para el plan de pagos)" value="${esc(d.banco || '')}">` : ''}
           ${d.cod === 'TC' ? `<div class="deuda-tc">
             <select name="d_${i}_tarjeta">${VEH.categoriasTC.map(([v, l]) => `<option value="${v}" ${catTC(d) === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
             <input name="d_${i}_limite" type="text" inputmode="decimal" placeholder="Límite de la tarjeta (Bs)" value="${esc(d.limite || '')}">
             <div class="small muted deuda-tc-info" id="tcInfo_${i}"></div>
           </div>` : ''}
         </div>`).join('') || '<div class="small muted" style="padding:6px 0">Sin deudas registradas.</div>'}</div>
+      <datalist id="bancosBo">${BANCOS_BO.map(b => `<option value="${b}">`).join('')}</datalist>
       <button type="button" class="btn sm" data-act="vehDeudaAdd" style="margin-top:8px">${ICONS.plus} Agregar deuda</button>
       ${V.deudas.some(d => grupoDe(d.cod) === 'social') ? `<div class="veh-row" style="margin-top:6px"><div><span>Vivienda social: aporte propio</span><div class="small muted">Del crédito H3–H4 · define la tabla del límite total</div></div>${opciones('aporteSocial', V.aporteSocial === 'mayor' ? 'mayor' : 'menor', [['mayor', '≥ 20%'], ['menor', '< 20%']])}</div>` : ''}
       <details class="small muted" style="margin-top:10px"><summary class="link" style="cursor:pointer">Cuota a considerar en tarjetas</summary>${tablaTarjetas()}</details>
@@ -705,11 +707,8 @@ function vehCalc() {
   </div>
   ${consumo ? `<div class="veh-row no-print pdf-boletas"><div><span>Boletas de pago a solicitar</span><div class="small muted">Para los requisitos del PDF · explica al cliente según el caso</div></div>
     <div class="seg-toggle">${['3', '6'].map(n => `<label><input type="radio" name="boletasPdf" value="${n}" ${(V.boletas === '6' ? '6' : '3') === n ? 'checked' : ''} data-act="vehBoletas"><span>${n}</span></label>`).join('')}</div></div>
-  <div class="req-extra no-print">
-    <div><span class="req-extra-tit">Requisitos extra</span><div class="small muted">Se agregan al PDF y al mensaje de WhatsApp</div></div>
-    ${(V.reqExtra || []).length ? `<ul class="req-lista">${V.reqExtra.map((r, i) => `<li><span>✅ ${esc(r)}</span><button type="button" class="sim-del" data-act="vehReqDel" data-i="${i}" aria-label="Quitar">✕</button></li>`).join('')}</ul>` : ''}
-    <div class="sim-guardar-row"><input id="reqExtraTxt" type="text" autocomplete="off" placeholder="Ej. Certificado de trabajo"><button type="button" class="btn" data-act="vehReqAdd">+ Añadir</button></div>
-  </div>` : ''}
+` : ''}
+  ${bloqueRequisitos(V, { consumo })}
 
   <details class="card tight plan" ${V.verPlan ? 'open' : ''} id="vehPlan">
     <summary style="padding:14px;cursor:pointer;font-weight:700">📅 Plan de pagos (${plazo} cuotas)</summary>
@@ -730,6 +729,23 @@ function vehCalc() {
     eT, eC, teac, totales: plan.totales,
     desglose: x => ({ capInt: x.cuota, desg: desg ? parte(x, desg) : 0, dima: dima ? parte(x, dima) : 0, ces: ces ? parte(x, ces) : 0 }) };
   if (consumo && typeof cargarJsPDF === 'function') cargarJsPDF().catch(() => {}); // se deja listo para que el PDF salga al instante
+}
+
+/* Requisitos en pantalla: los automáticos (según el caso) y los extra que añade el ejecutivo */
+const BANCOS_BO = ['Banco Mercantil Santa Cruz', 'Banco Nacional de Bolivia (BNB)', 'Banco Unión', 'Banco Bisa', 'Banco de Crédito (BCP)',
+  'Banco Económico', 'Banco Ganadero', 'Banco FIE', 'BancoSol', 'Banco Fortaleza', 'Banco Prodem', 'Banco PyME Ecofuturo',
+  'Banco PyME de la Comunidad', 'Banco de la Nación Argentina', 'Cooperativa', 'Institución financiera de desarrollo (IFD)'];
+function bloqueRequisitos(V, tipo) {
+  const auto = typeof requisitosPropuesta === 'function' ? requisitosPropuesta({ ...tipo, V: { ...V, reqExtra: [] } }) : [];
+  return `
+  <div class="req-extra no-print">
+    <div><span class="req-extra-tit">Requisitos</span><div class="small muted">Salen en el mensaje de WhatsApp${tipo.consumo ? ' y en el PDF' : ''}</div></div>
+    <ul class="req-lista">${auto.map(r => `<li class="auto"><span>✅ ${esc(r)}</span></li>`).join('')}
+      ${(V.reqExtra || []).map((r, i) => `<li><span>✅ ${esc(r)}</span><button type="button" class="sim-del" data-act="vehReqDel" data-i="${i}" aria-label="Quitar">✕</button></li>`).join('')}</ul>
+    ${(V.deudas || []).some(d => d.cod !== 'TC' && !String(d.banco || '').trim()) ? `<div class="small muted">💡 Indica el banco de cada crédito en "Servicio de deudas" para el requisito del plan de pagos.</div>` : ''}
+    <div class="small muted" style="margin-top:2px">Requisitos extra</div>
+    <div class="sim-guardar-row"><input id="reqExtraTxt" type="text" autocomplete="off" placeholder="Ej. Certificado de trabajo"><button type="button" class="btn" data-act="vehReqAdd">+ Añadir</button></div>
+  </div>`;
 }
 
 /* ---------------- Tarjeta de crédito ----------------
@@ -838,6 +854,7 @@ function tarjetaCalc(V, out) {
     <button class="btn sm" data-act="vehTramite">${ICONS.folder} Crear trámite</button>
   </div>
 
+  ${bloqueRequisitos(V, { tarjeta: true })}
   <details class="card tc-pago no-print" id="tcPagoBox" ${UI.tcPagoAbierto ? 'open' : ''}>
     <summary><b>⏱️ ¿Cuánto tarda en pagar una deuda?</b></summary>
     <p class="small muted">Para explicar al cliente el costo de pagar solo el mínimo. Tasa y pago mínimo referenciales (Parámetros de productos).</p>
@@ -858,6 +875,7 @@ function tarjetaCalc(V, out) {
     const bw = $('#btnWa'); if (bw) bw.lastChild.textContent = ' ' + (V.telefono.trim() ? 'WhatsApp al cliente' : 'Compartir');
   });
   $('#tcPagoBox')?.addEventListener('toggle', e => { UI.tcPagoAbierto = e.target.open; });
+  $('#reqExtraTxt')?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); ACTIONS.vehReqAdd(); } });
   ['tcSaldo', 'tcTasa', 'tcPago'].forEach(id => $('#' + id)?.addEventListener('change', e => {
     V[id] = e.target.value; if (id === 'tcSaldo') V.tcPago = ''; guardarCalc(); vehCalc();
   }));
@@ -894,8 +912,8 @@ function mensajePropuesta(u) {
   } else l.push(`📊 *Tasa de interés:* ${nf2.format(num(V.tasaFija))}% fija todo el plazo`);
   l.push(seguros.length ? `🛡️ *Seguros incluidos:* ${lista(seguros)}` : '🛡️ *Seguros:* sin Desgravamen');
   l.push(LINEA_MSJ);
-  if (u.consumo && typeof requisitosConsumo === 'function') {
-    l.push('', '📋 *Requisitos:*', ...requisitosConsumo({ ...u, V: { ...V, boletas: vehState().boletas, reqExtra: vehState().reqExtra } }).map(r => `✅ ${r}`));
+  if (typeof requisitosPropuesta === 'function') {
+    l.push('', '📋 *Requisitos:*', ...requisitosPropuesta({ ...u, V: { ...V, boletas: vehState().boletas, reqExtra: vehState().reqExtra } }).map(r => `✅ ${r}`));
   }
   l.push('', `_Propuesta referencial del ${fmtDate(today())}, sujeta a evaluación y aprobación._`, '', '¿Avanzamos con tu solicitud? 🙌', firmaMsj());
   return l.join('\n');
@@ -909,6 +927,9 @@ function compartirTarjeta(u) {
     `🏷️ *Tarjeta:* ${u.cat.nombre}`,
     `💰 *Límite:* Bs ${nf2.format(u.monto)}`,
     LINEA_MSJ,
+    '',
+    '📋 *Requisitos:*',
+    ...requisitosPropuesta({ ...u, V: { ...u.V, reqExtra: vehState().reqExtra } }).map(r => `✅ ${r}`),
     '',
     `_Propuesta referencial del ${fmtDate(today())}, sujeta a evaluación y aprobación._`,
     '',
@@ -934,7 +955,7 @@ ROUTES.calculadora.after = () => {
   // (motor, estado y seguro automotor se recalculan sin redibujar)
   const onChange = e => {
     Object.entries(formData(form)).forEach(([k, v]) => {
-      const m = k.match(/^d_(\d+)_(cod|cuota|tarjeta|limite)$/);
+      const m = k.match(/^d_(\d+)_(cod|cuota|tarjeta|limite|banco)$/);
       if (m) { const d = V.deudas[+m[1]]; if (d) d[m[2]] = v; }
       else V[k] = v;
     });
@@ -1008,7 +1029,7 @@ Object.assign(ACTIONS, {
     setTimeout(() => $('#reqExtraTxt')?.focus(), 30);
   },
   vehReqDel: el => { const V = vehState(); (V.reqExtra || []).splice(+el.dataset.i, 1); guardarCalc(); vehCalc(); },
-  vehBoletas: el => { vehState().boletas = el.value; guardarCalc(); },
+  vehBoletas: el => { vehState().boletas = el.value; guardarCalc(); vehCalc(); },
   vehTcMax: el => { vehState().tcLimite = el.dataset.v; guardarCalc(); render(); },
   vehUsarMax: el => { const V = vehState(); V[esConsumo(V) ? 'montoCons' : 'compra'] = el.dataset.v.replace('.', ','); guardarCalc(); render(); },
   vehDeudaDel: el => { vehState().deudas.splice(+el.dataset.i, 1); guardarCalc(); render(); },
