@@ -8,7 +8,7 @@ const VEH = {
   edadCredito: 76,                            // el crédito no puede pasar de los 76 años del mayor
   desgravamen: { titular: 1.250, mancomunado: 2.251 }, // % sobre saldo capital
   dima: { titular: 0.36, mancomunado: 0.72 },          // % sobre saldo capital
-  cesantia: 0.84,                              // consumo: seguro de cesantía, % anual sobre saldo insoluto
+  cesantia: 0.84,                              // consumo: seguro de cesantía, % anual por persona sobre saldo insoluto
   periodoSeguros: 12,                          // los % de seguros son anuales → se cobran /12 cada mes
   msc: { gasolina: 3.8, hibrido: 3.8 },        // % del valor del vehículo, se suma al monto a financiar
   plazos: [12, 24, 36, 48, 60, 72, 84, 96, 108, 120],
@@ -80,6 +80,7 @@ function vehState() {
   if (!Array.isArray(V.deudas)) V.deudas = [];
   if (V.brutoT !== undefined) { V.montoT = V.montoT || V.brutoT; V.montoC = V.montoC || V.brutoC; delete V.brutoT; delete V.brutoC; }
   if (V.primasMonto !== undefined) { V.primasT = V.primasT || V.primasMonto; delete V.primasMonto; }
+  if (V.cesT === undefined) { V.cesT = V.cesantia === '' ? '' : 'si'; V.cesC = ''; delete V.cesantia; }
   V.tipoT = V.tipoT || 'sueldo'; V.tipoC = V.tipoC || 'sueldo';
   return V;
 }
@@ -184,8 +185,8 @@ function vehForm() {
         <div class="chk-group">${chk('desgT', V.desgT, 'Titular')}${V.codeudor === 'si' ? chk('desgC', V.desgC, 'Codeudor') : ''}</div></div>
       <div class="veh-row veh-seg"><div><span>Seguro DIMA</span><div class="small muted" id="dimaInfo"></div></div>
         <div class="chk-group">${chk('dimaT', V.dimaT, 'Titular')}${V.codeudor === 'si' ? chk('dimaC', V.dimaC, 'Codeudor') : ''}</div></div>
-      ${esConsumo(V) ? `<div class="veh-row veh-seg"><div><span>Seguro de cesantía</span><div class="small muted">${pct3(VEH.cesantia)}% anual sobre saldo insoluto (${mensual(VEH.cesantia)}% mensual)</div></div>
-        <div class="chk-group">${chk('cesantia', V.cesantia === '' ? '' : 'si', 'Incluir')}</div></div>` : ''}
+      ${esConsumo(V) ? `<div class="veh-row veh-seg"><div><span>Seguro de cesantía</span><div class="small muted" id="cesInfo"></div></div>
+        <div class="chk-group">${chk('cesT', V.cesT, 'Titular')}${V.codeudor === 'si' ? chk('cesC', V.cesC, 'Codeudor') : ''}</div></div>` : ''}
     `)}
 
     ${seccion(3, 'Condiciones', `
@@ -564,7 +565,15 @@ function vehCalc() {
   // Monto máximo (sección 7): la cuota más alta del crédito no puede pasar la cuota máxima que deja la
   // capacidad de pago (sección 6). La cuota (capital + interés + seguros) es proporcional al monto,
   // así que se calcula la cuota de Bs 100.000 y se escala.
-  const ces = consumo && V.cesantia !== '' ? VEH.cesantia : 0; // cesantía: solo consumo
+  // Cesantía (solo consumo): 0,84% anual por persona asegurada; cada uno solo si tiene sus ingresos registrados
+  const conIngT = num(V.montoT) > 0, conIngC = conCodeudor && V.ingC === 'si' && num(V.montoC) > 0;
+  if (consumo) { ajusta('cesT', conIngT); ajusta('cesC', conIngC); }
+  const cesQuien = consumo ? [V.cesT === 'si' && conIngT, V.cesC === 'si' && conIngC] : [false, false];
+  const nCes = cesQuien.filter(Boolean).length;
+  const ces = nCes * VEH.cesantia;
+  const cesTxt = ces ? `${quien(cesQuien[0], cesQuien[1])} · ${pct3(ces)}% anual (${mensual(ces)}% mensual)` : '';
+  const ci = $('#cesInfo');
+  if (ci) ci.textContent = ces ? cesTxt : `${pct3(VEH.cesantia)}% anual por persona sobre saldo insoluto · solo para quien tiene ingresos registrados`;
   const segMensual = (desg + dima + ces) / VEH.periodoSeguros; // % mensual sobre saldo
   const planDe = mto => generarPlan({ monto: mto, n: plazo, tasa: num(V.tasaFija), sistema: 'frances', gracia: 0, mesesFijos: fijo < plazo ? fijo : 0, tasaVar, desg: segMensual, seguroMes: 0, fecha: today() });
   const cuotaMaxDe = pl => Math.max(pl.rows[0].total, fijo < plazo ? pl.rows[fijo].total : 0);
@@ -672,7 +681,7 @@ function vehCalc() {
       ${cap && cap.mensual ? `<dt>Capacidad de pago</dt><dd>${(cap.sinNorma || cap.sinTarjetas) && cap.okCons ? '⚠️ Incompleto (faltan parámetros)' : cap.cumple ? '✅ Cumple' : '❌ No cumple'} · máx. Bs ${nf2.format(cap.maxNueva)}</dd>` : ''}
       <dt>Desgravamen</dt><dd>${esc(desgTxt)}</dd>
       <dt>DIMA</dt><dd>${dima ? esc(dimaTxt) : 'No'}</dd>
-      ${consumo ? `<dt>Cesantía</dt><dd>${ces ? `${pct3(ces)}% anual sobre saldo` : 'No'}</dd>` : ''}
+      ${consumo ? `<dt>Cesantía</dt><dd>${ces ? esc(cesTxt) : 'No'}</dd>` : ''}
     </dl>
   </div>
 
