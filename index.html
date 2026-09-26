@@ -11,14 +11,14 @@
   <title>Mi Cartera · Ejecutivo BMSC</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
   <!-- Inicio de sesión (Firebase Authentication) -->
   <div id="login" class="lock login hidden" aria-live="polite">
     <form id="loginForm" class="lock-box" autocomplete="on">
-      <div class="brand-mark big">MC</div>
+      <img class="logo-big" src="icons/icon.svg" alt="Mi Cartera">
       <h1>Mi Cartera</h1>
       <p class="muted">Ejecutivo de cuenta · BMSC</p>
       <div class="field" style="text-align:left">
@@ -37,7 +37,7 @@
   <!-- Bloqueo por PIN -->
   <div id="lock" class="lock hidden" aria-live="polite">
     <div class="lock-box">
-      <div class="brand-mark big">MC</div>
+      <img class="logo-big" src="icons/icon.svg" alt="Mi Cartera">
       <h1>Mi Cartera</h1>
       <p class="muted">Ingresa tu PIN</p>
       <input id="lockPin" type="password" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="••••">
@@ -51,7 +51,8 @@
       <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
     </button>
     <div class="brand">
-      <div class="brand-mark">MC<span id="cloudDot" class="cloud-dot hidden" title="Nube"></span></div>
+      <button type="button" id="avatarBtn" class="brand-mark avatar" aria-label="Foto de perfil"><span id="avatarTxt">MC</span><img id="avatarImg" alt="" hidden><span id="cloudDot" class="cloud-dot hidden" title="Nube"></span></button>
+      <input type="file" id="fotoInput" accept="image/*" hidden>
       <div>
         <div id="pageTitle" class="page-title">Inicio</div>
         <div id="pageSub" class="page-sub">Ejecutivo de cuenta</div>

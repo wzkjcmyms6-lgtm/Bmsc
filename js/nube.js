@@ -172,7 +172,7 @@ function escucharNormas() {
 
 /* Perfil del ejecutivo (nombre, agencia, teléfono y metas): se guarda en su cuenta
    (usuarios/{uid}/perfil/datos) y aparece en cualquier dispositivo donde inicie sesión. */
-const CAMPOS_PERFIL = ['ejecutivo', 'agencia', 'telefonoEjecutivo', 'metaMensual', 'metaClientes'];
+const CAMPOS_PERFIL = ['ejecutivo', 'agencia', 'telefonoEjecutivo', 'metaMensual', 'metaClientes', 'foto'];
 const perfilLocal = () => Object.fromEntries(CAMPOS_PERFIL.map(k => [k, Store.get().settings[k] ?? '']));
 function escucharPerfil() {
   desuscribir.push(fs.onSnapshot(ref('perfil', 'datos'), snap => {
@@ -345,7 +345,19 @@ async function iniciar() {
   };
   Nube.guardarPerfil = async () => {
     if (!uidActual) return;
-    await fs.setDoc(ref('perfil', 'datos'), limpio({ ...perfilLocal(), actualizado: new Date().toISOString() }));
+    const p = perfilLocal(), ahora = new Date().toISOString();
+    await fs.setDoc(ref('perfil', 'datos'), limpio({ ...p, actualizado: ahora }));
+    // Directorio de ejecutivos: solo datos de contacto (lo ven los usuarios con sesión)
+    await fs.setDoc(fs.doc(db, 'directorio', uidActual), limpio({
+      nombre: p.ejecutivo, agencia: p.agencia, telefono: p.telefonoEjecutivo, foto: p.foto, usuario: Nube.usuario, actualizado: ahora
+    })).catch(e => console.warn('Directorio', e.code || e.message));
+  };
+  Nube.directorio = async () => {
+    if (!uidActual) throw new Error('Inicia sesión');
+    const snap = await fs.getDocs(fs.collection(db, 'directorio'));
+    return snap.docs.map(d => ({ ...d.data(), esYo: d.id === uidActual }))
+      .filter(x => x.nombre || x.telefono || x.foto)
+      .sort((a, b) => (b.esYo - a.esYo) || String(a.nombre || '').localeCompare(String(b.nombre || '')));
   };
   Nube.sincronizarTodo = () => subirTodo({ reemplazar: false, accion: 'sincronizar' });
   Nube.cerrarSesion = async () => {

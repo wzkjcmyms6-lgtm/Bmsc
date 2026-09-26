@@ -1,13 +1,33 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#00875A"/>
-      <stop offset="1" stop-color="#003B2B"/>
+    <linearGradient id="fondo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3A8A62"/>
+      <stop offset="1" stop-color="#0E4A33"/>
     </linearGradient>
+    <radialGradient id="moneda" cx=".5" cy=".42" r=".6">
+      <stop offset="0" stop-color="#1F6B4A"/>
+      <stop offset="1" stop-color="#0F4B34"/>
+    </radialGradient>
+    <linearGradient id="oro" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F3D27A"/>
+      <stop offset="1" stop-color="#C99A2E"/>
+    </linearGradient>
+    <path id="arco" d="M 80 256 A 176 176 0 0 1 432 256"/>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#g)"/>
-  <rect x="112" y="300" width="64" height="104" rx="14" fill="#fff" opacity=".9"/>
-  <rect x="224" y="236" width="64" height="168" rx="14" fill="#fff" opacity=".9"/>
-  <rect x="336" y="164" width="64" height="240" rx="14" fill="#F2B705"/>
-  <path d="M112 236 L240 150 L300 190 L400 110" fill="none" stroke="#F2B705" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect width="512" height="512" rx="112" fill="url(#fondo)"/>
+  <!-- Moneda: aro dorado con texto y estrellas -->
+  <circle cx="256" cy="256" r="206" fill="url(#moneda)" stroke="url(#oro)" stroke-width="10"/>
+  <circle cx="256" cy="256" r="160" fill="none" stroke="url(#oro)" stroke-width="4"/>
+  <text font-family="Georgia, 'Times New Roman', serif" font-size="30" font-weight="700" letter-spacing="6" fill="#E9C46A">
+    <textPath href="#arco" startOffset="50%" text-anchor="middle">MI CARTERA</textPath>
+  </text>
+  <polygon points="85.9,308.9 88.1,314.8 94.5,315.1 89.5,319.1 91.2,325.2 85.9,321.7 80.6,325.2 82.3,319.1 77.4,315.1 83.7,314.8" fill="#E9C46A"/><polygon points="128.0,375.0 130.2,380.9 136.6,381.2 131.6,385.2 133.3,391.3 128.0,387.8 122.7,391.3 124.4,385.2 119.5,381.2 125.8,380.9" fill="#E9C46A"/><polygon points="194.1,417.1 196.3,423.0 202.7,423.3 197.7,427.3 199.4,433.4 194.1,429.9 188.8,433.4 190.5,427.3 185.5,423.3 191.9,423.0" fill="#E9C46A"/><polygon points="256.0,428.0 258.2,433.9 264.6,434.2 259.6,438.2 261.3,444.3 256.0,440.8 250.7,444.3 252.4,438.2 247.4,434.2 253.8,433.9" fill="#E9C46A"/><polygon points="317.9,417.1 320.1,423.0 326.5,423.3 321.5,427.3 323.2,433.4 317.9,429.9 312.6,433.4 314.3,427.3 309.3,423.3 315.7,423.0" fill="#E9C46A"/><polygon points="384.0,375.0 386.2,380.9 392.5,381.2 387.6,385.2 389.3,391.3 384.0,387.8 378.7,391.3 380.4,385.2 375.4,381.2 381.8,380.9" fill="#E9C46A"/><polygon points="426.1,308.9 428.3,314.8 434.6,315.1 429.7,319.1 431.4,325.2 426.1,321.7 420.8,325.2 422.5,319.1 417.5,315.1 423.9,314.8" fill="#E9C46A"/>
+  <!-- Barras y tendencia -->
+  <g transform="translate(256 262) scale(0.86) translate(-256 -250)">
+    <rect x="160" y="276" width="46" height="74" rx="10" fill="#F4F7F5"/>
+    <rect x="233" y="232" width="46" height="118" rx="10" fill="#F4F7F5"/>
+    <rect x="306" y="182" width="46" height="168" rx="10" fill="url(#oro)"/>
+    <path d="M152 236 L226 186 L270 214 L346 156" fill="none" stroke="#E9C46A" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M318 150 L354 150 L350 186" fill="none" stroke="#E9C46A" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
 </svg>

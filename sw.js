@@ -1,8 +1,8 @@
 /* Service worker: permite usar la app sin conexión */
-const CACHE = 'mi-cartera-v43';
+const CACHE = 'mi-cartera-v44';
 const ASSETS = [
   './', 'index.html', 'css/styles.css', 'js/data.js', 'js/store.js', 'js/app.js', 'js/calculadora.js', 'js/vehicular.js', 'js/propuesta-pdf.js', 'js/vendor/jspdf.umd.min.js', 'js/firebase-config.js', 'js/nube.js',
-  'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
+  'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
   'data/tipo-cambio.json'
 ];
 

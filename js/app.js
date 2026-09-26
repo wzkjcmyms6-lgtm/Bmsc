@@ -280,6 +280,7 @@ const ICONS = {
   phone: '<svg viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg>',
   wa: '<svg viewBox="0 0 24 24"><path d="M3 21l1.7-5A8.5 8.5 0 1 1 8 19.4z"/><path d="M9 10c0 3 2 5 5 5l1.2-1.2-2-1-1 .8c-1-.4-1.6-1-2-2l.8-1-1-2z"/></svg>',
   plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  users: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6"/><path d="M16 4a4 4 0 0 1 0 8M22 21c0-3-1.5-5-4-5.7"/></svg>',
   user: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>',
   folder: '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
   calc: '<svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 19h8"/></svg>',
@@ -356,6 +357,7 @@ const ROUTES = {
   'calculadora': { title: 'Simulador vehicular', nav: 'calculadora', render: () => '' },
   'parametros': { title: 'Parámetros de productos', nav: 'mas', render: () => '', back: '#/mas' },
   'ajustes': { title: 'Ajustes', nav: 'mas', render: viewSettings, back: '#/mas' },
+  'directorio': { title: 'Directorio de ejecutivos', nav: 'mas', render: viewDirectorio, back: '#/mas' },
   'respaldo': { title: 'Respaldo de datos', nav: 'mas', render: viewBackup, back: '#/mas' },
   'tipo-cambio': { title: 'Dólar oficial', nav: 'inicio', render: viewTC, back: '#/' },
   'historial': { title: 'Historial de cambios', nav: 'mas', render: viewHistorial, back: '#/mas' }
@@ -377,11 +379,90 @@ function route() {
   render();
   window.scrollTo(0, 0);
 }
-// Subtítulo de la barra superior: nombre y agencia del ejecutivo
+// Subtítulo de la barra superior (nombre y agencia) y foto de perfil del ejecutivo
+const iniciales = n => String(n || '').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase();
 function pintarSub() {
   const st = S().settings;
   $('#pageSub').textContent = [st.ejecutivo, st.agencia].filter(Boolean).join(' · ') || 'Ejecutivo de cuenta · BMSC';
+  const img = $('#avatarImg'), txt = $('#avatarTxt');
+  if (img) { img.hidden = !st.foto; if (st.foto) img.src = st.foto; }
+  if (txt) { txt.hidden = !!st.foto; txt.textContent = iniciales(st.ejecutivo) || 'MC'; }
 }
+
+/* ---------- Foto de perfil: se recorta cuadrada, se reduce y se guarda en la cuenta ---------- */
+function reducirFoto(file, lado = 256) {
+  return new Promise((ok, mal) => {
+    const url = URL.createObjectURL(file);
+    const im = new Image();
+    im.onload = () => {
+      const c = document.createElement('canvas'); c.width = c.height = lado;
+      const m = Math.min(im.naturalWidth, im.naturalHeight);
+      c.getContext('2d').drawImage(im, (im.naturalWidth - m) / 2, (im.naturalHeight - m) / 2, m, m, 0, 0, lado, lado);
+      URL.revokeObjectURL(url);
+      ok(c.toDataURL('image/jpeg', 0.82));
+    };
+    im.onerror = () => { URL.revokeObjectURL(url); mal(new Error('No se pudo leer la imagen')); };
+    im.src = url;
+  });
+}
+function guardarFoto(foto) {
+  S().settings.foto = foto; Store.save(); pintarSub();
+  window.Nube?.guardarPerfil?.().catch(e => console.warn('Perfil', e));
+}
+function hojaFoto() {
+  const st = S().settings;
+  openSheet('Foto de perfil', `
+    <div class="foto-prev">${st.foto ? `<img src="${st.foto}" alt="">` : `<span>${esc(iniciales(st.ejecutivo) || 'MC')}</span>`}</div>
+    <p class="small muted center">Tu foto aparece arriba a la izquierda y en el directorio de ejecutivos.</p>
+    <button type="button" class="btn primary block" id="fotoElegir">📷 ${st.foto ? 'Cambiar foto' : 'Subir foto'}</button>
+    ${st.foto ? '<button type="button" class="btn ghost block" id="fotoQuitar" style="margin-top:8px">Quitar foto</button>' : ''}
+    <a class="btn ghost block" href="#/directorio" id="fotoDir" style="margin-top:8px">👥 Ver directorio de ejecutivos</a>`, body => {
+    $('#fotoElegir', body).addEventListener('click', () => $('#fotoInput').click());
+    $('#fotoQuitar', body)?.addEventListener('click', () => { guardarFoto(''); closeSheet(); toast('Foto quitada'); });
+    $('#fotoDir', body).addEventListener('click', closeSheet);
+  });
+}
+$('#avatarBtn')?.addEventListener('click', hojaFoto);
+$('#fotoInput')?.addEventListener('change', async ev => {
+  const f = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
+  if (!f) return;
+  try { guardarFoto(await reducirFoto(f)); closeSheet(); toast('Foto de perfil actualizada'); }
+  catch (e) { toast(e.message); }
+});
+
+/* ---------- Directorio de ejecutivos (todos los usuarios con sesión) ---------- */
+function viewDirectorio() {
+  return `
+  <div class="search"><input id="dirBuscar" type="search" placeholder="Buscar por nombre o agencia" autocomplete="off"></div>
+  <div id="dirLista"><div class="card empty">Cargando directorio…</div></div>
+  <p class="small muted center">Cada ejecutivo aparece aquí al guardar su nombre, agencia, teléfono o foto en Ajustes.</p>`;
+}
+async function cargarDirectorio() {
+  const box = $('#dirLista');
+  if (!box) return;
+  let lista;
+  try { lista = await window.Nube.directorio(); }
+  catch (e) {
+    box.innerHTML = `<div class="card empty">${e.code === 'permission-denied' ? 'Firebase todavía no permite el directorio: falta publicar la regla de «directorio».' : 'No se pudo cargar el directorio. Revisa tu conexión e inicia sesión.'}</div>`;
+    return;
+  }
+  const pintar = () => {
+    const q = ($('#dirBuscar')?.value || '').toLowerCase().trim();
+    const f = lista.filter(x => !q || [x.nombre, x.agencia, x.usuario].join(' ').toLowerCase().includes(q));
+    box.innerHTML = f.length ? `<div class="card tight">${f.map(x => `
+      <div class="list-item dir-item">
+        <div class="dir-foto">${x.foto ? `<img src="${esc(x.foto)}" alt="">` : `<span>${esc(iniciales(x.nombre) || '?')}</span>`}</div>
+        <div class="grow"><div class="title">${esc(x.nombre || 'Sin nombre')}${x.esYo ? ' <span class="badge">Tú</span>' : ''}</div>
+          <div class="sub">${esc([x.agencia, x.telefono].filter(Boolean).join(' · ') || 'Sin datos de contacto')}</div></div>
+        ${x.telefono && !x.esYo ? `<a class="icon-btn dir-btn" href="tel:${esc(x.telefono)}" aria-label="Llamar">${ICONS.phone}</a>
+          <a class="icon-btn dir-btn" target="_blank" rel="noopener" href="${waLink(x.telefono, `Hola ${String(x.nombre || '').split(' ')[0]}, te escribe ${S().settings.ejecutivo || 'un compañero'} del BMSC.`)}" aria-label="WhatsApp">${ICONS.wa}</a>` : ''}
+      </div>`).join('')}</div>` : '<div class="card empty">No hay ejecutivos que coincidan.</div>';
+  };
+  pintar();
+  $('#dirBuscar')?.addEventListener('input', pintar);
+}
+ROUTES.directorio.after = cargarDirectorio;
 function render() {
   pintarSub();
   const def = ROUTES[current.name];
@@ -1336,6 +1417,7 @@ function viewMore() {
   return `
   <div class="section-title">Herramientas</div>
   <div class="card tight">
+    ${item('#/directorio', 'users', 'Directorio de ejecutivos', 'Nombre, agencia y contacto de tus compañeros')}
     ${item('#/agenda', 'cal', 'Agenda', 'Llamadas, visitas, cobranza y cuotas próximas')}
     ${item('', 'book', 'Guías de crédito', 'Requisitos y consejos por tipo de crédito', 'openGuides')}
     ${item('', 'bulb', 'Consejos para el ejecutivo', 'Buenas prácticas de gestión de cartera', 'openTips')}

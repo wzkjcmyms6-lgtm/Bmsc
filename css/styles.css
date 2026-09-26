@@ -571,3 +571,15 @@ table.tbl.tabla-norma th { white-space: normal; line-height: 1.2; vertical-align
 /* Selector de tipo de crédito */
 .prod-sel { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .prod-sel .seg-toggle { flex-shrink: 0; }
+
+/* Foto de perfil (arriba a la izquierda) y directorio de ejecutivos */
+.brand-mark.avatar { border: 0; padding: 0; cursor: pointer; font-family: inherit; }
+.brand-mark.avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block; }
+.logo-big { width: 76px; height: 76px; display: block; margin: 0 auto 12px; border-radius: 20px; box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+.foto-prev { width: 120px; height: 120px; margin: 4px auto 10px; border-radius: 50%; overflow: hidden; background: var(--gold); color: var(--green-900); display: grid; place-items: center; font-size: 40px; font-weight: 800; }
+.foto-prev img { width: 100%; height: 100%; object-fit: cover; }
+.dir-item { gap: 12px; align-items: center; }
+.dir-foto { width: 48px; height: 48px; flex: none; border-radius: 50%; overflow: hidden; background: var(--gold); color: var(--green-900); display: grid; place-items: center; font-weight: 800; }
+.dir-foto img { width: 100%; height: 100%; object-fit: cover; }
+.dir-btn { flex: none; color: var(--green-600); }
+.brand-mark.avatar img[hidden], .brand-mark.avatar span[hidden] { display: none; }
