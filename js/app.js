@@ -1530,7 +1530,7 @@ function viewMore() {
       Haz respaldos periódicos desde "Respaldo de datos".
     </div>
   </div>
-  <p class="center small muted">Mi Cartera · v1.0</p>`;
+  <p class="center small muted">Mi Cartera · v1.0<br>Creado por Juan Manuel Llorenti</p>`;
 }
 
 /* =========================================================

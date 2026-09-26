@@ -204,6 +204,9 @@ function generarPropuestaPDF(u) {
   doc.text(pie, M, Math.max(H - 12 - (pie.length - 1) * 3.4, tieneContacto ? yC + hC + 5 : 0));
   doc.setFillColor(...dorado); doc.rect(0, H - 4, W, 1, 'F');
   doc.setFillColor(...verdeOsc); doc.rect(0, H - 3, W, 3, 'F');
+  // Crédito del autor de la app, discreto en la franja verde inferior
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(5.5); doc.setTextColor(...doradoSuave);
+  doc.text('Mi Cartera · creado por Juan Manuel Llorenti', W / 2, H - 0.9, { align: 'center' });
 
   // Nombre del archivo: "Propuesta Crédito Consumo - Nombre del Cliente.pdf" (sin caracteres no válidos en archivos)
   const limpio = t => String(t || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
