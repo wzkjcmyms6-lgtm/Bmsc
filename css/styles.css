@@ -616,3 +616,8 @@ table.tbl.tabla-norma th { white-space: normal; line-height: 1.2; vertical-align
 .lock { overflow-y: auto; -webkit-overflow-scrolling: touch; place-items: start center; }
 .lock-box { margin: auto 0; }
 .lock.login { padding-top: max(16px, env(safe-area-inset-top)); padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+
+/* Opción: detalle de costos en el PDF */
+.pdf-detalle-row { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; }
+.pdf-detalle-row input { width: 22px; height: 22px; margin-top: 2px; flex: none; accent-color: var(--green-600); }
+.pdf-detalle-row > span { display: grid; gap: 4px; }

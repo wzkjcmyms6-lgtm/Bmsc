@@ -718,6 +718,12 @@ function vehCalc() {
       </tbody></table>
     </div>
   </details>
+  ${consumo ? `<div class="card pdf-detalle no-print">
+    <label class="pdf-detalle-row"><input type="checkbox" id="pdfDetalle" ${V.pdfDetalle === 'si' ? 'checked' : ''}>
+      <span><b>Incluir el detalle de costos en el PDF</b>
+      <span class="small muted">Normalmente el PDF muestra solo el monto, el plazo, la tasa, la cuota aproximada y los requisitos. Si lo activas, se agrega una sección <b>"Detalle de costos (referencial)"</b> con: la composición de la primera cuota, las tasas de Desgravamen, DIMA y Cesantía, el total de intereses, el total de seguros, el total a pagar y el costo efectivo anual (TEAC). Úsalo solo si el cliente lo pide.</span></span>
+    </label>
+  </div>` : ''}
   <p class="small muted">${consumo ? 'Desgravamen, DIMA y Cesantía' : 'Desgravamen y DIMA'}: tasa anual ÷ 12, aplicada cada mes sobre el saldo capital. Cuota variable estimada con la TRe vigente; puede cambiar cuando el BCB publique una nueva.</p>`;
   $('#vehPlan')?.addEventListener('toggle', e => { V.verPlan = e.target.open; guardarCalc(); });
   $('#reqExtraTxt')?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); ACTIONS.vehReqAdd(); } });
@@ -725,10 +731,11 @@ function vehCalc() {
     V.telefono = e.target.value; guardarCalc();
     const bw = $('#btnWa'); if (bw) bw.lastChild.textContent = ' ' + (V.telefono.trim() ? 'WhatsApp al cliente' : 'Compartir');
   });
-  vehCalc.ultimo = { V: { ...V }, monto, c1, cVar, plazo, fijo, tasaVar, desgTxt, dima, dimaTxt, ces, cesTxt, consumo, primaMSC, aplica, valor, valorUsd, tcVeh, compra,
+  vehCalc.ultimo = { V: { ...V }, monto, c1, cVar, plazo, fijo, tasaVar, desg, desgTxt, dima, dimaTxt, ces, cesTxt, consumo, primaMSC, aplica, valor, valorUsd, tcVeh, compra,
     eT, eC, teac, totales: plan.totales,
     desglose: x => ({ capInt: x.cuota, desg: desg ? parte(x, desg) : 0, dima: dima ? parte(x, dima) : 0, ces: ces ? parte(x, ces) : 0 }) };
-  if (consumo && typeof cargarJsPDF === 'function') cargarJsPDF().catch(() => {}); // se deja listo para que el PDF salga al instante
+  if (consumo && typeof cargarJsPDF === 'function') { cargarJsPDF().catch(() => {}); cargarLogoPDF(); } // listo para que el PDF salga al instante
+  $('#pdfDetalle')?.addEventListener('change', e => { V.pdfDetalle = e.target.checked ? 'si' : ''; guardarCalc(); });
 }
 
 /* Requisitos en pantalla: los automáticos (según el caso) y los extra que añade el ejecutivo */
@@ -1020,7 +1027,7 @@ Object.assign(ACTIONS, {
     calcState().veh = null; vehState().producto = producto; UI.simsAbierto = false; guardarCalc(); render();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   },
-  vehPDF: () => { const u = vehCalc.ultimo; if (u) compartirPropuestaPDF({ ...u, V: { ...u.V, boletas: vehState().boletas, reqExtra: vehState().reqExtra } }); },
+  vehPDF: () => { const u = vehCalc.ultimo, V = vehState(); if (u) compartirPropuestaPDF({ ...u, V: { ...u.V, boletas: V.boletas, reqExtra: V.reqExtra, pdfDetalle: V.pdfDetalle } }); },
   // Requisitos extra que añade el ejecutivo (salen en el PDF y en WhatsApp)
   vehReqAdd: () => {
     const inp = $('#reqExtraTxt'), t = (inp?.value || '').trim();

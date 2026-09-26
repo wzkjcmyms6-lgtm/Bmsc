@@ -47,88 +47,153 @@ function requisitosPropuesta(u) {
 }
 const requisitosConsumo = requisitosPropuesta;
 
+/* Logo para el encabezado del PDF (se carga una vez y queda en memoria) */
+let logoPDF = null;
+function cargarLogoPDF() {
+  if (logoPDF) return Promise.resolve(logoPDF);
+  return fetch('icons/icon-192.png').then(r => r.blob()).then(b => new Promise(ok => {
+    const fr = new FileReader(); fr.onload = () => ok(logoPDF = fr.result); fr.readAsDataURL(b);
+  })).catch(() => null);
+}
+
 function generarPropuestaPDF(u) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const V = u.V, st = S().settings;
-  const W = 210, M = 16, ancho = W - 2 * M;
-  const verde = [0, 86, 63], dorado = [201, 151, 0], gris = [95, 107, 101], texto = [23, 33, 29];
+  const W = 210, H = 297, M = 16, ancho = W - 2 * M;
+  const verde = [0, 86, 63], verdeOsc = [0, 59, 43], dorado = [201, 151, 0], doradoSuave = [236, 214, 150];
+  const gris = [95, 107, 101], texto = [23, 33, 29], linea = [224, 230, 226], fondo = [242, 247, 244];
   const bs = n => `Bs ${nf2.format(n)}`;
-  const persona = (nombre, ci, ext, e) => [nombre || 'Sin nombre', ci ? `CI ${ci}${ext ? ' ' + ext : ''}` : '', e ? edadTxt(e) : ''].filter(Boolean).join(' · ');
+  const persona = (ci, ext, e) => [ci ? `CI ${ci}${ext ? ' ' + ext : ''}` : '', e ? edadTxt(e) : ''].filter(Boolean).join(' · ');
+  const fuente = (estilo, tam, color) => { doc.setFont('helvetica', estilo); doc.setFontSize(tam); doc.setTextColor(...color); };
 
-  // Encabezado
-  doc.setFillColor(...verde); doc.rect(0, 0, W, 30, 'F');
-  doc.setFillColor(...dorado); doc.rect(0, 30, W, 1.2, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-  doc.text('Banco Mercantil Santa Cruz', M, 11);
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(17);
-  doc.text('Propuesta de crédito de consumo', M, 21);
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-  doc.text(fmtDate(today()), W - M, 11, { align: 'right' });
-  let y = 40;
-  const ejecutivo = [st.ejecutivo, sucursalTxt(st.agencia), st.telefonoEjecutivo && `Cel. ${st.telefonoEjecutivo}`].filter(Boolean).join(' · ');
-  if (ejecutivo) { doc.setTextColor(...gris); doc.setFontSize(9.5); doc.text(`Ejecutivo de cuenta: ${ejecutivo}`, M, y); y += 8; }
+  // ---------- Encabezado ----------
+  doc.setFillColor(...verdeOsc); doc.rect(0, 0, W, 40, 'F');
+  doc.setFillColor(...verde); doc.triangle(W * 0.52, 0, W, 0, W, 40, 'F');   // diagonal sutil
+  doc.setFillColor(...dorado); doc.rect(0, 40, W, 1.4, 'F');
+  let xTit = M;
+  if (logoPDF) { try { doc.addImage(logoPDF, 'PNG', M, 9, 22, 22); xTit = M + 28; } catch { /* sin logo */ } }
+  fuente('normal', 9, doradoSuave); doc.text('BANCO MERCANTIL SANTA CRUZ', xTit, 15, { charSpace: 0.6 });
+  fuente('bold', 19, [255, 255, 255]); doc.text('Propuesta de crédito', xTit, 24.5);
+  fuente('normal', 11, [226, 240, 233]); doc.text('Crédito de consumo', xTit, 31);
+  fuente('normal', 9, [226, 240, 233]); doc.text(fmtDate(today()), W - M, 15, { align: 'right' });
 
-  const titulo = t => {
-    doc.setTextColor(...verde); doc.setFont('helvetica', 'bold'); doc.setFontSize(12.5);
-    doc.text(t, M, y);
-    doc.setDrawColor(...dorado); doc.setLineWidth(0.6); doc.line(M, y + 2, M + ancho, y + 2);
-    y += 8;
+  // ---------- Cliente ----------
+  let y = 54;
+  fuente('normal', 8.5, gris); doc.text('PREPARADA PARA', M, y, { charSpace: 0.5 });
+  fuente('bold', 15, texto); doc.text(V.nombre || 'Cliente', M, y + 7);
+  fuente('normal', 9.5, gris); doc.text(persona(V.ci, V.ext, u.eT), M, y + 12.5);
+  if (V.codeudor === 'si') {
+    fuente('normal', 9.5, gris);
+    doc.text(`Codeudor: ${[V.cNombre || 'Sin nombre', persona(V.cCi, V.cExt, u.eC)].filter(Boolean).join(' · ')}`, M, y + 17.5);
+    y += 5;
+  }
+  y += 20;
+
+  // ---------- Tarjetas principales: monto, plazo y cuota ----------
+  const gap = 4, wBox = (ancho - 2 * gap) / 3, hBox = 25;
+  const caja = (x, etiqueta, valor, sub, destacada) => {
+    if (destacada) { doc.setFillColor(...verde); doc.roundedRect(x, y, wBox, hBox, 3, 3, 'F'); }
+    else { doc.setFillColor(...fondo); doc.roundedRect(x, y, wBox, hBox, 3, 3, 'F'); }
+    fuente('normal', 8, destacada ? doradoSuave : gris); doc.text(etiqueta, x + 5, y + 7.5, { charSpace: 0.3 });
+    fuente('bold', 14.5, destacada ? [255, 255, 255] : verde); doc.text(valor, x + 5, y + 16);
+    if (sub) { fuente('normal', 8, destacada ? [226, 240, 233] : gris); doc.text(sub, x + 5, y + 21.2); }
   };
-  // Fila etiqueta / valor (el valor puede ocupar varias líneas)
-  let par = false;
+  caja(M, 'MONTO DEL CRÉDITO', bs(u.monto));
+  caja(M + wBox + gap, 'PLAZO', `${u.plazo} meses`, `${nf0.format(u.plazo / 12)} ${u.plazo === 12 ? 'año' : 'años'}`);
+  caja(M + 2 * (wBox + gap), 'CUOTA MENSUAL APROX.', bs(u.c1.total), 'referencial', true);
+  y += hBox + 12;
+
+  // ---------- Títulos y filas ----------
+  const titulo = t => {
+    doc.setFillColor(...dorado); doc.rect(M, y - 4, 1.4, 5.2, 'F');
+    fuente('bold', 11.5, verde); doc.text(t, M + 4, y, { charSpace: 0.4 });
+    y += 6;
+  };
   const fila = (etiqueta, valor, fuerte = false) => {
-    doc.setFontSize(10);
-    const lineas = doc.splitTextToSize(String(valor), ancho * 0.6 - 4);
-    const alto = Math.max(7, lineas.length * 4.6 + 2.6);
-    if (par) { doc.setFillColor(243, 246, 244); doc.rect(M, y - 4.8, ancho, alto, 'F'); }
-    par = !par;
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(...gris);
-    doc.text(etiqueta, M + 2, y);
-    doc.setFont('helvetica', fuerte ? 'bold' : 'normal'); doc.setTextColor(...texto);
-    doc.text(lineas, M + ancho - 2, y, { align: 'right' });
+    fuente('normal', 10, texto);
+    const lineas = doc.splitTextToSize(String(valor), ancho * 0.62);
+    const alto = Math.max(9, lineas.length * 4.6 + 4.6);
+    fuente('normal', 10, gris); doc.text(etiqueta, M, y + 5.6);
+    fuente(fuerte ? 'bold' : 'normal', 10, texto); doc.text(lineas, M + ancho, y + 5.6, { align: 'right' });
+    doc.setDrawColor(...linea); doc.setLineWidth(0.25); doc.line(M, y + alto, M + ancho, y + alto);
     y += alto;
   };
 
-  // CONDICIONES
+  // ---------- Condiciones ----------
   titulo('CONDICIONES');
-  fila('Titular', persona(V.nombre, V.ci, V.ext, u.eT));
-  if (V.codeudor === 'si') fila('Codeudor', persona(V.cNombre, V.cCi, V.cExt, u.eC));
-  fila('Monto del crédito', bs(u.monto), true);
-  fila('Plazo', `${u.plazo} meses (${u.plazo / 12} ${u.plazo === 12 ? 'año' : 'años'})`);
-  // Referencial: tasas como se pactan (variable = margen + TRe) y cuotas aproximadas
   fila('Tasa de interés', u.cVar
-    ? `Meses 1 a ${u.fijo}: ${nf2.format(num(V.tasaFija))}% fija · desde el mes ${u.fijo + 1}: ${nf2.format(num(V.margenVar))}% + TRe`
+    ? `Meses 1 a ${u.fijo}: ${nf2.format(num(V.tasaFija))}% fija\nDesde el mes ${u.fijo + 1}: ${nf2.format(num(V.margenVar))}% + TRe`
     : `${nf2.format(num(V.tasaFija))}% fija todo el plazo`);
   const alta = Math.max(u.c1.total, u.cVar ? u.cVar.total : 0);
-  fila('Cuota mensual aprox.', bs(u.c1.total), true);
   if (alta > u.c1.total + 0.005) fila('Cuota más alta aprox.', bs(alta), true);
-  const d = u.desglose(u.c1);
-  fila('Composición de la primera cuota (aprox.)', [`Capital + interés ${bs(d.capInt)}`, d.desg && `Desgravamen ${bs(d.desg)}`, d.dima && `DIMA ${bs(d.dima)}`, d.ces && `Cesantía ${bs(d.ces)}`].filter(Boolean).join(' · '));
-  fila('Seguro de Desgravamen', u.desgTxt);
-  fila('Seguro DIMA', u.dima ? u.dimaTxt : 'No');
-  fila('Seguro de Cesantía', u.ces ? u.cesTxt : 'No');
-  fila('Total intereses', bs(u.totales.interes));
-  fila('Total seguros', bs(u.totales.desg));
-  fila('Total a pagar', bs(u.totales.total), true);
-  fila('Costo efectivo anual (TEAC)', `${nf2.format(u.teac * 100)}%`);
+  fila('Seguros incluidos', [u.desg && 'Desgravamen', u.dima && 'DIMA', u.ces && 'Cesantía'].filter(Boolean).join(' · ') || 'Sin seguros');
 
-  // REQUISITOS
-  y += 6; par = false;
-  titulo('REQUISITOS');
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5); doc.setTextColor(...texto);
-  doc.setDrawColor(...verde); doc.setLineWidth(0.4);
-  for (const r of requisitosConsumo(u)) {
-    doc.rect(M + 2, y - 3.6, 4, 4);
-    doc.text(r, M + 9, y);
+  // Detalle de costos: solo si el ejecutivo lo habilita
+  if (V.pdfDetalle === 'si') {
     y += 8;
+    titulo('DETALLE DE COSTOS (REFERENCIAL)');
+    const d = u.desglose(u.c1);
+    fila('Primera cuota (aprox.)', [`Capital + interés ${bs(d.capInt)}`, d.desg && `Desgravamen ${bs(d.desg)}`, d.dima && `DIMA ${bs(d.dima)}`, d.ces && `Cesantía ${bs(d.ces)}`].filter(Boolean).join(' · '));
+    const pctS = v => `${new Intl.NumberFormat('es-BO', { maximumFractionDigits: 3 }).format(v)}%`;
+    fila('Tasas de seguros (anual, sobre saldo)', [u.desg && `Desgravamen ${pctS(u.desg)}`, u.dima && `DIMA ${pctS(u.dima)}`, u.ces && `Cesantía ${pctS(u.ces)}`].filter(Boolean).join(' · ') || 'Sin seguros');
+    // Totales en 4 casillas
+    y += 4;
+    const g = 3, w4 = (ancho - 3 * g) / 4, h4 = 17;
+    [['TOTAL INTERESES', bs(u.totales.interes)], ['TOTAL SEGUROS', bs(u.totales.desg)], ['TOTAL A PAGAR', bs(u.totales.total)], ['TEAC', `${nf2.format(u.teac * 100)}%`]]
+      .forEach(([et, val], i) => {
+        const x = M + i * (w4 + g);
+        doc.setFillColor(...fondo); doc.roundedRect(x, y, w4, h4, 2.5, 2.5, 'F');
+        fuente('normal', 7, gris); doc.text(et, x + 3.5, y + 6, { charSpace: 0.3 });
+        fuente('bold', 10.5, i === 2 ? verde : texto); doc.text(val, x + 3.5, y + 12.5);
+      });
+    y += h4 + 2;
   }
 
-  // Pie
-  doc.setFontSize(8.5); doc.setTextColor(...gris);
-  const pie = doc.splitTextToSize('Cálculos referenciales, sujetos a evaluación y aprobación del banco. La cuota con tasa variable es estimada con la TRe vigente y puede cambiar. Los seguros se calculan cada mes sobre el saldo del capital.', ancho);
-  doc.text(pie, M, 297 - 14 - (pie.length - 1) * 3.8);
+  // ---------- Requisitos ----------
+  y += 10;
+  titulo('REQUISITOS');
+  y += 1;
+  const limite = H - 58;   // espacio reservado para el contacto y el pie
+  const reqs = requisitosPropuesta(u);
+  // Con el detalle de costos, los requisitos van en dos columnas para que todo entre en una hoja
+  const cols = V.pdfDetalle === 'si' && reqs.length > 3 ? 2 : 1;
+  const wCol = cols === 2 ? (ancho - 6) / 2 : ancho;
+  const porCol = Math.ceil(reqs.length / cols);
+  const y0 = y; let yMax = y;
+  reqs.forEach((r, i) => {
+    const c = Math.floor(i / porCol), x = M + c * (wCol + 6);
+    if (i % porCol === 0) y = y0;
+    const lineas = doc.splitTextToSize(r, wCol - 12);
+    if (cols === 1 && y + 8 > limite) { doc.addPage(); y = 22; }
+    doc.setDrawColor(...verde); doc.setLineWidth(0.45); doc.roundedRect(x + 0.5, y, 4.6, 4.6, 1, 1, 'S');
+    fuente('normal', cols === 2 ? 9.8 : 10.5, texto); doc.text(lineas, x + 9, y + 3.7);
+    y += Math.max(7.5, lineas.length * 4.6 + 2.9);
+    yMax = Math.max(yMax, y);
+  });
+  y = yMax;
+
+  // ---------- Contacto del ejecutivo (abajo) ----------
+  const hC = 24, yC = Math.max(y + 10, H - 26 - hC);
+  if (st.ejecutivo || st.telefonoEjecutivo) {
+    doc.setFillColor(...fondo); doc.roundedRect(M, yC, ancho, hC, 3, 3, 'F');
+    doc.setFillColor(...verde); doc.roundedRect(M, yC, 2.2, hC, 1.1, 1.1, 'F');
+    fuente('normal', 8, gris); doc.text('TU EJECUTIVO DE CUENTA', M + 7, yC + 7, { charSpace: 0.4 });
+    fuente('bold', 12, texto); doc.text(st.ejecutivo || '', M + 7, yC + 13.5);
+    fuente('normal', 9.5, gris); doc.text([cargoTxt(), sucursalTxt(st.agencia), 'Banco Mercantil Santa Cruz'].filter(Boolean).join(' · '), M + 7, yC + 19);
+    if (st.telefonoEjecutivo) {
+      fuente('normal', 8, gris); doc.text('CELULAR', M + ancho - 6, yC + 7, { align: 'right', charSpace: 0.4 });
+      fuente('bold', 13, verde); doc.text(st.telefonoEjecutivo, M + ancho - 6, yC + 14.5, { align: 'right' });
+    }
+  }
+
+  // ---------- Pie ----------
+  fuente('normal', 7.8, gris);
+  const pie = doc.splitTextToSize('Propuesta referencial, sujeta a evaluación y aprobación del banco. Las cuotas son aproximadas: la cuota con tasa variable se estima con la TRe vigente y puede cambiar.', ancho);
+  const tieneContacto = !!(st.ejecutivo || st.telefonoEjecutivo);
+  doc.text(pie, M, Math.max(H - 12 - (pie.length - 1) * 3.4, tieneContacto ? yC + hC + 5 : 0));
+  doc.setFillColor(...dorado); doc.rect(0, H - 4, W, 1, 'F');
+  doc.setFillColor(...verdeOsc); doc.rect(0, H - 3, W, 3, 'F');
 
   // Nombre del archivo: "Propuesta Crédito Consumo - Nombre del Cliente.pdf" (sin caracteres no válidos en archivos)
   const limpio = t => String(t || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -138,7 +203,7 @@ function generarPropuestaPDF(u) {
 
 /* Genera el PDF y lo comparte (WhatsApp, Archivos…) o lo descarga si el celular no permite compartir */
 async function compartirPropuestaPDF(u) {
-  try { await cargarJsPDF(); } catch (e) { toast(e.message + '. Revisa tu conexión.'); return; }
+  try { await Promise.all([cargarJsPDF(), cargarLogoPDF()]); } catch (e) { toast(e.message + '. Revisa tu conexión.'); return; }
   const { doc, nombre } = generarPropuestaPDF(u);
   const blob = doc.output('blob');
   const file = new File([blob], nombre, { type: 'application/pdf' });
