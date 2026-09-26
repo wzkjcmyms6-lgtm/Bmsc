@@ -352,8 +352,10 @@ $$('#sheet [data-close]').forEach(el => el.addEventListener('click', closeSheet)
    ========================================================= */
 const UI = { clientQuery: '', clientSort: 'peso', clientFilter: 'todos', hbTab: 'tramites', hbStage: 'activos', calcTab: 'cuota' };
 
+// title, nav y back pueden ser funciones: cambian según el rol (el gerente tiene su propio panel)
 const ROUTES = {
-  '': { title: 'Inicio', nav: 'inicio', render: viewHome },
+  '': { title: () => esGerente() ? 'Panel de agencia' : 'Inicio', nav: 'inicio', render: () => esGerente() ? viewPanelGerente() : viewHome(),
+    after: () => { if (esGerente()) completarVista('gPanel', htmlPanel); } },
   'clientes': { title: 'Clientes', nav: 'clientes', render: viewClients },
   'cliente': { title: 'Cliente', nav: 'clientes', render: viewClient, back: '#/clientes' },
   'homebase': { title: 'Home Base', nav: 'homebase', render: viewHomeBase },
@@ -365,30 +367,43 @@ const ROUTES = {
   'ajustes': { title: 'Ajustes', nav: 'mas', render: viewSettings, back: '#/mas' },
   'directorio': { title: 'Directorio de ejecutivos', nav: 'mas', render: viewDirectorio, back: '#/mas' },
   'solicitudes': { title: 'Solicitudes de acceso', nav: 'mas', render: viewSolicitudes, back: '#/mas' },
-  'equipo': { title: 'Supervisión', nav: 'mas', render: viewEquipo, back: '#/mas' },
+  'equipo': { title: () => esGerente() && !current.param ? 'Mi equipo' : 'Supervisión', nav: () => esGerente() ? 'equipo' : 'mas', render: viewEquipo,
+    back: () => current.param ? '#/equipo' : esGerente() ? '' : '#/mas' },
+  'tramites-equipo': { title: 'Trámites del equipo', nav: 'tramites', render: p => (window.viewTramitesEquipo ? viewTramitesEquipo(p) : ''),
+    after: () => { if (esGerente()) completarVista('gTramites', filas => htmlTramitesEquipo(filas, current.param || '')); } },
   'respaldo': { title: 'Respaldo de datos', nav: 'mas', render: viewBackup, back: '#/mas' },
   'tipo-cambio': { title: 'Dólar oficial', nav: 'inicio', render: viewTC, back: '#/' },
   'historial': { title: 'Historial de cambios', nav: 'mas', render: viewHistorial, back: '#/mas' }
 };
 
 let current = { name: '', param: null };
+const valor = x => (typeof x === 'function' ? x() : x);
+// Barra superior e inferior de la sección actual (título, volver, pestaña activa, botón +)
+function pintarMarco() {
+  const def = ROUTES[current.name];
+  window.pintarNav?.();
+  $('#pageTitle').textContent = valor(def.title);
+  $('#backBtn').classList.toggle('hidden', !valor(def.back));
+  $$('.bottomnav a').forEach(a => a.classList.toggle('active', a.dataset.nav === valor(def.nav)));
+  // El gerente no registra clientes ni trámites: solo usa el + en su agenda
+  $('#quickAdd').style.visibility = esGerente() && current.name !== 'agenda' ? 'hidden' : '';
+}
 
 function route() {
   const hash = location.hash.replace(/^#\/?/, '');
   const [name, param] = hash.split('/');
   const r = ROUTES[name] ? name : '';
   current = { name: r, param: param ? decodeURIComponent(param) : null };
-  const def = ROUTES[r];
-  $('#pageTitle').textContent = def.title;
   pintarSub();
-  $('#backBtn').classList.toggle('hidden', !def.back);
-  $$('.bottomnav a').forEach(a => a.classList.toggle('active', a.dataset.nav === def.nav));
   closeSheet();
   render();
   window.scrollTo(0, 0);
 }
 /* Sucursales según el rol (ejecutivo: una; gerente: su grupo; capacitador: ninguna) */
 const rolActual = () => window.Nube?.rol || 'ejecutivo';
+// Gerente de agencia. Mientras llega el rol desde la nube se usa el último conocido en este dispositivo.
+const esGerente = () => typeof window.viewPanelGerente === 'function'
+  && (window.Nube?.rol || (S().settings.nubeUid && S().settings.rolCache) || '') === 'gerente';
 const sucursalesDe = rol => rol === 'capacitador' ? [] : rol === 'gerente' ? SUCURSALES_GERENTE : SUCURSALES;
 const sinTildes = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 // "Agencia Torre 501" → "Torre 501" (si coincide con una sucursal de la lista)
@@ -536,6 +551,7 @@ function bannerAcceso() {
   return '';
 }
 function render() {
+  pintarMarco();
   pintarSub();
   limpiarTelefonosDemo();
   const def = ROUTES[current.name];
@@ -544,7 +560,7 @@ function render() {
 }
 window.addEventListener('hashchange', route);
 $('#backBtn').addEventListener('click', () => {
-  location.hash = ROUTES[current.name].back || '#/';
+  location.hash = valor(ROUTES[current.name].back) || '#/';
 });
 
 /* =========================================================
@@ -1491,7 +1507,7 @@ function viewMore() {
   <div class="section-title">Herramientas</div>
   <div class="card tight">
     ${window.Nube?.esAdmin ? item('#/solicitudes', 'user', `Solicitudes de acceso${(() => { const n = (Nube.solicitudes || []).filter(x => x.estado === 'pendiente').length; return n ? ` <span class="badge red">${n}</span>` : ''; })()}`, 'Aprueba a los ejecutivos que se registran') : ''}
-    ${['admin', 'capacitador', 'gerente'].includes(window.Nube?.rol) ? item('#/equipo', 'chart', 'Supervisión', window.Nube.rol === 'gerente' ? 'Cartera y trámites de tu equipo (solo lectura)' : 'Cartera y trámites de todos los ejecutivos (solo lectura)') : ''}
+    ${['admin', 'capacitador'].includes(window.Nube?.rol) ? item('#/equipo', 'chart', 'Supervisión', window.Nube.rol === 'gerente' ? 'Cartera y trámites de tu equipo (solo lectura)' : 'Cartera y trámites de todos los ejecutivos (solo lectura)') : ''}
     ${item('#/directorio', 'users', 'Directorio de ejecutivos', 'Nombre, agencia y contacto de tus compañeros')}
     ${item('#/agenda', 'cal', 'Agenda', 'Llamadas, visitas, cobranza y cuotas próximas')}
     ${item('', 'book', 'Guías de crédito', 'Requisitos y consejos por tipo de crédito', 'openGuides')}
@@ -2046,13 +2062,14 @@ function hojaRol(uid) {
 /* ---------- Supervisión (administrador, capacitador y gerente): solo lectura ---------- */
 function viewEquipo(uid) {
   if (!['admin', 'capacitador', 'gerente'].includes(window.Nube?.rol)) return '<div class="card empty">Esta sección es para gerentes, capacitadores y el administrador.</div>';
+  if (!uid && esGerente()) return vistaEquipo('gEquipo', htmlEquipoGerente);
   return uid ? `<div id="eqDetalle"><div class="card empty">Cargando cartera…</div></div>`
     : `<p class="small muted" style="margin:0 2px 10px">${Nube.rol === 'gerente' ? 'Ejecutivos de tu equipo.' : 'Todos los ejecutivos.'} Puedes ver su cartera y trámites, pero no modificarlos.</p>
        <div id="eqLista"><div class="card empty">Cargando…</div></div>`;
 }
 async function cargarEquipo() {
   const uid = current.param;
-  ROUTES.equipo.back = uid ? '#/equipo' : '#/mas';
+  if (!uid && esGerente()) return completarVista('gEquipo', htmlEquipoGerente);
   let dir;
   try { dir = await Nube.directorio(); } catch (e) { const b = $('#eqLista') || $('#eqDetalle'); if (b) b.innerHTML = '<div class="card empty">No se pudo cargar. Revisa tu conexión.</div>'; return; }
   const visibles = dir.filter(x => !x.esYo && (Nube.rol !== 'gerente' || (Nube.equipo || []).includes(x.uid)));
@@ -2078,10 +2095,22 @@ async function cargarEquipo() {
   c.clients.forEach(cl => activeCredits(cl).forEach(cr => { nCred++; if (cr.estado === 'mora') mora += creditBalance(cr); }));
   const abiertos = c.cases.filter(caseOpen);
   const enTramite = abiertos.reduce((s, k) => s + toBs(num(k.monto), k.moneda), 0);
+  const ym = today().slice(0, 7);
+  let col = 0, nDes = 0;
+  c.clients.forEach(cl => (cl.credits || []).forEach(cr => { if ((cr.fechaDesembolso || '').startsWith(ym)) { col += toBs(num(cr.monto), cr.moneda); nDes++; } }));
+  const meta = num(c.perfil?.metaMensual);
   box.innerHTML = `
   <div class="card small muted">👁️ Solo lectura · ${esc([sucursalTxt(x.agencia), x.usuario ? 'Usuario ' + x.usuario : ''].filter(Boolean).join(' · '))}</div>
+  ${x.telefono ? `<div class="grid-2" style="margin-bottom:10px">
+    <a class="btn block" href="tel:${esc(x.telefono)}">${ICONS.phone} Llamar</a>
+    <a class="btn primary block" target="_blank" rel="noopener" href="${waLink(x.telefono, `Hola ${String(x.nombre || '').split(' ')[0]}, te escribe ${S().settings.ejecutivo || 'tu gerente'}.`)}">${ICONS.wa} WhatsApp</a></div>` : ''}
   <div class="hero"><div class="label">Cartera total</div><div class="big num">Bs ${nf0.format(total)}</div>
-    <div class="meta"><div><b class="num">${c.clients.length}</b>clientes</div><div><b class="num">${nCred}</b>créditos</div><div><b class="num">${pct(total ? mora / total : 0, 1)}</b>mora</div></div></div>
+    <div class="meta"><div><b class="num">${c.clients.length}</b>clientes</div><div><b class="num">${nCred}</b>créditos</div><div><b class="num">${pct(total ? mora / total : 0, 1)}</b>mora</div></div>
+    <div style="margin-top:14px">${meta ? `
+      <div class="row between small" style="margin-bottom:6px"><span>Meta de colocación del mes</span><span class="num">${pct(Math.min(1, col / meta), 0)}</span></div>
+      <div class="progress"><span style="width:${Math.min(100, col / meta * 100)}%"></span></div>
+      <div class="small" style="margin-top:6px;opacity:.85">Bs ${nf0.format(col)} de Bs ${nf0.format(meta)} · ${nDes} ${nDes === 1 ? 'desembolso' : 'desembolsos'}</div>`
+      : `<div class="small" style="opacity:.85">Colocado este mes: <b class="num">Bs ${nf0.format(col)}</b> · ${nDes} ${nDes === 1 ? 'desembolso' : 'desembolsos'} · sin meta registrada</div>`}</div></div>
   <div class="grid-2">
     <div class="card kpi"><div class="v num">${abiertos.length}</div><div class="l">Trámites en curso</div></div>
     <div class="card kpi"><div class="v num">Bs ${nf0.format(enTramite)}</div><div class="l">Monto en trámite</div></div>

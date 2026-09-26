@@ -29,7 +29,7 @@ service cloud.firestore {
       allow read, write: if request.auth != null
         && request.auth.uid == uid
         && coleccion in ['clientes', 'tramites', 'agenda', 'historial', 'simulaciones', 'perfil'];
-      allow read: if supervisa(uid) && coleccion in ['clientes', 'tramites', 'simulaciones'];
+      allow read: if supervisa(uid) && coleccion in ['clientes', 'tramites', 'simulaciones', 'perfil'];
     }
     // Normas internas: solo ejecutivos aprobados las leen; solo el administrador las cambia
     match /config/{doc} {

@@ -329,6 +329,8 @@ function escucharAcceso(user) {
     const d = s.exists() ? s.data() : {};
     const cambio = Nube.rol !== (d.rol || 'ejecutivo') || JSON.stringify(Nube.equipo) !== JSON.stringify(d.equipo || []);
     Nube.rol = aprobado ? (d.rol || 'ejecutivo') : ''; Nube.equipo = d.equipo || [];
+    // Se recuerda el rol en el dispositivo para mostrar la pantalla correcta al abrir la app
+    const st = Store.get().settings; if (st.rolCache !== Nube.rol) { st.rolCache = Nube.rol; Store.save(); }
     actualizar();
     if (cambio) redibujar();
   },
@@ -470,8 +472,10 @@ async function iniciar() {
   /* Supervisión: cartera de otro ejecutivo (solo lectura; las reglas deciden quién puede) */
   Nube.leerCartera = async uid => {
     const leer = async n => (await fs.getDocs(fs.collection(db, 'usuarios', uid, n))).docs.map(d => d.data());
-    const [clients, cases, sims] = await Promise.all([leer('clientes'), leer('tramites'), leer('simulaciones').catch(() => [])]);
-    return { clients, cases, sims };
+    // El perfil (meta del mes) es opcional: si las reglas aún no lo permiten, se sigue sin él
+    const perfil = fs.getDoc(fs.doc(db, 'usuarios', uid, 'perfil', 'datos')).then(s => (s.exists() ? s.data() : {})).catch(() => ({}));
+    const [clients, cases, sims, p] = await Promise.all([leer('clientes'), leer('tramites'), leer('simulaciones').catch(() => []), perfil]);
+    return { clients, cases, sims, perfil: p };
   };
   Nube.rechazar = async x => {
     await fs.deleteDoc(fs.doc(db, 'aprobados', x.uid)).catch(() => {});
