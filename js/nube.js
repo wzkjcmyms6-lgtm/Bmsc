@@ -31,6 +31,8 @@ const Nube = {
   normasEstado: '',         // '' | 'ok' | 'sin-permiso' | 'vacio'
   perfilEstado: '',         // '' | 'ok' | 'sin-permiso'
   acceso: '',               // '' | 'aprobado' | 'pendiente' | 'rechazado' (aprobación del administrador)
+  rol: '',                  // 'admin' | 'ejecutivo' | 'gerente' | 'capacitador' (lo asigna el administrador)
+  equipo: [],               // gerente: uids de los ejecutivos de su equipo
   esAdmin: false,
   solicitudes: [],          // solo el administrador: solicitudes de acceso
   aprobar: async () => {}, rechazar: async () => {}, quitarAcceso: async () => {},
@@ -272,6 +274,7 @@ $id('registroForm').addEventListener('submit', async ev => {
   const err = $id('regErr'), btn = $id('regBtn');
   const usuario = $id('regUser').value.trim(), nombre = $id('regNombre').value.trim(), agencia = $id('regAgencia').value.trim();
   const telefono = $id('regTel').value.trim();
+  const rol = $id('regRol').value || 'ejecutivo';
   const clave = $id('regPass').value;
   err.textContent = '';
   if (!/^[\w.-]{3,}$/.test(usuario)) { err.textContent = 'Usuario no válido (solo números o letras, sin espacios)'; return; }
@@ -280,7 +283,7 @@ $id('registroForm').addEventListener('submit', async ev => {
   if (!auth) { err.textContent = 'Conectando… intenta en unos segundos'; return; }
   btn.disabled = true; btn.textContent = 'Creando cuenta…';
   // Se guardan antes de crear la cuenta: al iniciar la sesión se envían con la solicitud
-  registroPendiente = { usuario, nombre, agencia, telefono };
+  registroPendiente = { usuario, nombre, agencia, telefono, rol };
   try {
     await authMod.createUserWithEmailAndPassword(auth, correoDe(usuario), clave);
     $id('regPass').value = $id('regPass2').value = '';
@@ -299,7 +302,7 @@ let registroPendiente = null;
    aprobados/{uid} existe → el ejecutivo ve el directorio y las normas. solicitudes/{uid} guarda el pedido. */
 function escucharAcceso(user) {
   Nube.esAdmin = (user.email || '').toLowerCase() === ADMIN;
-  if (Nube.esAdmin) { Nube.acceso = 'aprobado'; escucharSolicitudes(); return; }
+  if (Nube.esAdmin) { Nube.acceso = 'aprobado'; Nube.rol = 'admin'; escucharSolicitudes(); return; }
   let aprobado = null, solicitud;
   const actualizar = () => {
     if (aprobado === null || solicitud === undefined) return;
@@ -310,7 +313,7 @@ function escucharAcceso(user) {
       const st = Store.get().settings, r = registroPendiente || {};
       fs.setDoc(fs.doc(db, 'solicitudes', uidActual), limpio({
         usuario: Nube.usuario, nombre: r.nombre || st.ejecutivo || '', agencia: r.agencia || st.agencia || '',
-        telefono: r.telefono || st.telefonoEjecutivo || '',
+        telefono: r.telefono || st.telefonoEjecutivo || '', rolSolicitado: r.rol || 'ejecutivo',
         estado: 'pendiente', creado: new Date().toISOString()
       })).catch(e => console.warn('Solicitud', e.code || e.message));
     }
@@ -319,7 +322,14 @@ function escucharAcceso(user) {
       redibujar();
     }
   };
-  desuscribirAcceso.push(fs.onSnapshot(fs.doc(db, 'aprobados', uidActual), s => { aprobado = s.exists(); actualizar(); },
+  desuscribirAcceso.push(fs.onSnapshot(fs.doc(db, 'aprobados', uidActual), s => {
+    aprobado = s.exists();
+    const d = s.exists() ? s.data() : {};
+    const cambio = Nube.rol !== (d.rol || 'ejecutivo') || JSON.stringify(Nube.equipo) !== JSON.stringify(d.equipo || []);
+    Nube.rol = aprobado ? (d.rol || 'ejecutivo') : ''; Nube.equipo = d.equipo || [];
+    actualizar();
+    if (cambio) redibujar();
+  },
     e => { console.warn('Aprobados', e.code || e.message); aprobado = false; actualizar(); }));
   desuscribirAcceso.push(fs.onSnapshot(fs.doc(db, 'solicitudes', uidActual), s => { solicitud = s.exists() ? s.data() : null; actualizar(); },
     e => { console.warn('Solicitud', e.code || e.message); solicitud = null; actualizar(); }));
@@ -386,7 +396,7 @@ async function alIniciarSesion(user) {
 function alCerrarSesion() {
   desuscribirAcceso.forEach(f => f());
   desuscribirAcceso = [];
-  Nube.acceso = ''; Nube.esAdmin = false; Nube.solicitudes = [];
+  Nube.acceso = ''; Nube.esAdmin = false; Nube.solicitudes = []; Nube.rol = ''; Nube.equipo = [];
   listo = false;
   uidActual = null;
   desuscribir.forEach(f => f());
@@ -450,9 +460,15 @@ async function iniciar() {
     await authMod.reauthenticateWithCredential(u, authMod.EmailAuthProvider.credential(u.email, actual));
     await authMod.updatePassword(u, nueva);
   };
-  Nube.aprobar = async x => {
-    await fs.setDoc(fs.doc(db, 'aprobados', x.uid), limpio({ usuario: x.usuario || '', nombre: x.nombre || '', aprobado: new Date().toISOString(), por: Nube.usuario }));
-    await fs.setDoc(fs.doc(db, 'solicitudes', x.uid), { estado: 'aprobado', revisado: new Date().toISOString() }, { merge: true });
+  Nube.aprobar = async (x, rol = 'ejecutivo', equipo = []) => {
+    await fs.setDoc(fs.doc(db, 'aprobados', x.uid), limpio({ usuario: x.usuario || '', nombre: x.nombre || '', rol, equipo: rol === 'gerente' ? equipo : [], aprobado: new Date().toISOString(), por: Nube.usuario }));
+    await fs.setDoc(fs.doc(db, 'solicitudes', x.uid), { estado: 'aprobado', rol, equipo: rol === 'gerente' ? equipo : [], revisado: new Date().toISOString() }, { merge: true });
+  };
+  /* Supervisión: cartera de otro ejecutivo (solo lectura; las reglas deciden quién puede) */
+  Nube.leerCartera = async uid => {
+    const leer = async n => (await fs.getDocs(fs.collection(db, 'usuarios', uid, n))).docs.map(d => d.data());
+    const [clients, cases, sims] = await Promise.all([leer('clientes'), leer('tramites'), leer('simulaciones').catch(() => [])]);
+    return { clients, cases, sims };
   };
   Nube.rechazar = async x => {
     await fs.deleteDoc(fs.doc(db, 'aprobados', x.uid)).catch(() => {});
@@ -462,7 +478,7 @@ async function iniciar() {
   Nube.directorio = async () => {
     if (!uidActual) throw new Error('Inicia sesión');
     const snap = await fs.getDocs(fs.collection(db, 'directorio'));
-    return snap.docs.map(d => ({ ...d.data(), esYo: d.id === uidActual }))
+    return snap.docs.map(d => ({ ...d.data(), uid: d.id, esYo: d.id === uidActual }))
       .filter(x => x.nombre || x.telefono || x.foto || x.usuario)
       .sort((a, b) => (b.esYo - a.esYo) || String(a.nombre || '').localeCompare(String(b.nombre || '')));
   };

@@ -604,3 +604,15 @@ table.tbl.tabla-norma th { white-space: normal; line-height: 1.2; vertical-align
 .req-lista li { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 6px 4px 6px 10px; font-size: 14px; }
 .deuda-banco { width: 100%; margin-top: 6px; padding: 9px 12px; border-radius: 11px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font-size: 15px; font-family: inherit; }
 .req-lista li.auto { background: transparent; border-style: dashed; padding: 6px 10px; }
+
+/* Roles y supervisión */
+.equipo-lista { display: grid; gap: 6px; max-height: 260px; overflow-y: auto; }
+.equipo-lista .chk { width: 100%; justify-content: flex-start; }
+.equipo-lista { grid-template-columns: 1fr; }
+.equipo-chk { display: flex; width: 100%; }
+.equipo-chk span { flex: 1; text-align: left; white-space: normal; }
+
+/* Inicio de sesión y registro: si el formulario es más alto que la pantalla, se desplaza */
+.lock { overflow-y: auto; -webkit-overflow-scrolling: touch; place-items: start center; }
+.lock-box { margin: auto 0; }
+.lock.login { padding-top: max(16px, env(safe-area-inset-top)); padding-bottom: max(16px, env(safe-area-inset-bottom)); }

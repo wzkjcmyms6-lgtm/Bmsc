@@ -11,11 +11,25 @@ service cloud.firestore {
         && (esAdmin() || exists(/databases/$(database)/documents/aprobados/$(request.auth.uid)));
     }
 
-    // Cada ejecutivo solo puede leer y escribir su propia cartera: usuarios/{su uid}/...
+    // Rol asignado por el administrador: ejecutivo, gerente (con su equipo) o capacitador
+    function acceso() {
+      return get(/databases/$(database)/documents/aprobados/$(request.auth.uid)).data;
+    }
+    // Quién puede VER la cartera de otro ejecutivo (nadie puede modificarla):
+    // el administrador, el capacitador comercial y el gerente de agencia (solo su equipo)
+    function supervisa(uid) {
+      return request.auth != null && (esAdmin()
+        || (exists(/databases/$(database)/documents/aprobados/$(request.auth.uid))
+            && (acceso().rol == 'capacitador'
+                || (acceso().rol == 'gerente' && uid in acceso().equipo))));
+    }
+
+    // Cada ejecutivo lee y escribe su propia cartera: usuarios/{su uid}/...
     match /usuarios/{uid}/{coleccion}/{id} {
       allow read, write: if request.auth != null
         && request.auth.uid == uid
         && coleccion in ['clientes', 'tramites', 'agenda', 'historial', 'simulaciones', 'perfil'];
+      allow read: if supervisa(uid) && coleccion in ['clientes', 'tramites', 'simulaciones'];
     }
     // Normas internas: solo ejecutivos aprobados las leen; solo el administrador las cambia
     match /config/{doc} {

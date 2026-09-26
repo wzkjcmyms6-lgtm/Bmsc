@@ -285,6 +285,7 @@ const ICONS = {
   phone: '<svg viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg>',
   wa: '<svg viewBox="0 0 24 24"><path d="M3 21l1.7-5A8.5 8.5 0 1 1 8 19.4z"/><path d="M9 10c0 3 2 5 5 5l1.2-1.2-2-1-1 .8c-1-.4-1.6-1-2-2l.8-1-1-2z"/></svg>',
   plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  chart: '<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
   users: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6"/><path d="M16 4a4 4 0 0 1 0 8M22 21c0-3-1.5-5-4-5.7"/></svg>',
   user: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>',
   folder: '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
@@ -364,6 +365,7 @@ const ROUTES = {
   'ajustes': { title: 'Ajustes', nav: 'mas', render: viewSettings, back: '#/mas' },
   'directorio': { title: 'Directorio de ejecutivos', nav: 'mas', render: viewDirectorio, back: '#/mas' },
   'solicitudes': { title: 'Solicitudes de acceso', nav: 'mas', render: viewSolicitudes, back: '#/mas' },
+  'equipo': { title: 'Supervisión', nav: 'mas', render: viewEquipo, back: '#/mas' },
   'respaldo': { title: 'Respaldo de datos', nav: 'mas', render: viewBackup, back: '#/mas' },
   'tipo-cambio': { title: 'Dólar oficial', nav: 'inicio', render: viewTC, back: '#/' },
   'historial': { title: 'Historial de cambios', nav: 'mas', render: viewHistorial, back: '#/mas' }
@@ -484,14 +486,15 @@ function viewSolicitudes() {
       <div class="list-item dir-item">
         <div class="dir-foto"><span>${esc(iniciales(x.nombre) || String(x.usuario || '?').slice(-2))}</span></div>
         <div class="grow"><div class="title">${esc(x.nombre || 'Sin nombre')}</div>
-          <div class="sub">${esc(['Usuario ' + (x.usuario || '—'), x.agencia, x.telefono ? 'Cel. ' + x.telefono : '', x.creado ? fmtDate(x.creado.slice(0, 10)) : ''].filter(Boolean).join(' · '))}</div></div>
+          <div class="sub">${esc(['Usuario ' + (x.usuario || '—'), x.agencia, x.telefono ? 'Cel. ' + x.telefono : '', x.creado ? fmtDate(x.creado.slice(0, 10)) : ''].filter(Boolean).join(' · '))}</div>
+          <div class="sub"><span class="badge ${x.estado === 'aprobado' ? '' : 'gray'}">${esc(ROLES[x.estado === 'aprobado' ? x.rol || 'ejecutivo' : x.rolSolicitado || 'ejecutivo'])}</span>${x.estado !== 'aprobado' && x.rolSolicitado && x.rolSolicitado !== 'ejecutivo' ? ' <span class="small muted">(solicitado)</span>' : ''}${x.estado === 'aprobado' && x.rol === 'gerente' ? ` <span class="small muted">· equipo de ${(x.equipo || []).length}</span>` : ''}</div></div>
         <div class="sol-btns">${botones(x)}</div>
       </div>`).join('')}</div>` : '';
   const btn = (act, uid, txt, cls = '') => `<button type="button" class="btn sm ${cls}" data-act="${act}" data-uid="${esc(uid)}">${txt}</button>`;
   return `
   <p class="small muted" style="margin:0 2px 10px">Los ejecutivos se registran solos desde la pantalla de inicio de sesión (<b>Crear cuenta</b>). Hasta que los apruebes, pueden usar el simulador y su cartera, pero no ven el directorio ni los parámetros de la norma.</p>
   ${grupo('Pendientes', todas.filter(x => x.estado === 'pendiente'), x => btn('solAprobar', x.uid, '✓ Aprobar', 'primary') + btn('solRechazar', x.uid, 'Rechazar', 'ghost'))}
-  ${grupo('Aprobados', todas.filter(x => x.estado === 'aprobado'), x => btn('solRechazar', x.uid, 'Quitar acceso', 'ghost'))}
+  ${grupo('Aprobados', todas.filter(x => x.estado === 'aprobado'), x => btn('solAprobar', x.uid, 'Rol y equipo', 'ghost') + btn('solRechazar', x.uid, 'Quitar acceso', 'ghost'))}
   ${grupo('Rechazados', todas.filter(x => x.estado === 'rechazado'), x => btn('solAprobar', x.uid, 'Aprobar', 'ghost'))}
   ${todas.length ? '' : '<div class="card empty">Todavía no hay solicitudes.</div>'}`;
 }
@@ -1459,6 +1462,7 @@ function viewMore() {
   <div class="section-title">Herramientas</div>
   <div class="card tight">
     ${window.Nube?.esAdmin ? item('#/solicitudes', 'user', `Solicitudes de acceso${(() => { const n = (Nube.solicitudes || []).filter(x => x.estado === 'pendiente').length; return n ? ` <span class="badge red">${n}</span>` : ''; })()}`, 'Aprueba a los ejecutivos que se registran') : ''}
+    ${['admin', 'capacitador', 'gerente'].includes(window.Nube?.rol) ? item('#/equipo', 'chart', 'Supervisión', window.Nube.rol === 'gerente' ? 'Cartera y trámites de tu equipo (solo lectura)' : 'Cartera y trámites de todos los ejecutivos (solo lectura)') : ''}
     ${item('#/directorio', 'users', 'Directorio de ejecutivos', 'Nombre, agencia y contacto de tus compañeros')}
     ${item('#/agenda', 'cal', 'Agenda', 'Llamadas, visitas, cobranza y cuotas próximas')}
     ${item('', 'book', 'Guías de crédito', 'Requisitos y consejos por tipo de crédito', 'openGuides')}
@@ -1524,7 +1528,7 @@ function viewSettings() {
   ${window.Nube?.usuario ? `<div class="section-title">Seguridad</div>
   <div class="card tight"><a class="list-item" data-act="cambiarClave">
     <div class="icon-dot">${ICONS.lock}</div>
-    <div class="grow"><div class="title">Cambiar mi clave</div><div class="sub">Usuario ${esc(Nube.usuario)}</div></div>
+    <div class="grow"><div class="title">Cambiar mi clave</div><div class="sub">Usuario ${esc(Nube.usuario)}${Nube.rol ? ' · ' + esc(ROLES[Nube.rol] || Nube.rol) : ''}</div></div>
     <span class="muted">${ICONS.chev}</span></a></div>` : ''}`;
 }
 ROUTES.ajustes.after = () => {
@@ -1940,12 +1944,7 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
 
 // Acciones del administrador (solicitudes de acceso)
 Object.assign(ACTIONS, {
-  solAprobar: async el => {
-    const x = (Nube.solicitudes || []).find(s => s.uid === el.dataset.uid); if (!x) return;
-    el.disabled = true;
-    try { await Nube.aprobar(x); toast(`${x.nombre || 'Usuario ' + x.usuario} aprobado`); }
-    catch (e) { el.disabled = false; toast(e.code === 'permission-denied' ? 'Sin permiso: publica la regla nueva en Firebase' : e.message); }
-  },
+  solAprobar: el => hojaRol(el.dataset.uid),
   solRechazar: async el => {
     const x = (Nube.solicitudes || []).find(s => s.uid === el.dataset.uid); if (!x) return;
     if (!confirm(`¿Quitar el acceso de ${x.nombre || 'Usuario ' + x.usuario}?`)) return;
@@ -1979,3 +1978,89 @@ ACTIONS.cambiarClave = () => openSheet('Cambiar mi clave', `
     }
   });
 });
+
+/* ---------- Roles ---------- */
+const ROLES = { admin: 'Administrador', ejecutivo: 'Ejecutivo de cuenta', gerente: 'Gerente de agencia', capacitador: 'Capacitador comercial' };
+// Aprobar / cambiar rol: el administrador elige el rol y, para el gerente, los ejecutivos de su equipo
+function hojaRol(uid) {
+  const x = (Nube.solicitudes || []).find(s => s.uid === uid); if (!x) return;
+  const rolIni = x.estado === 'aprobado' ? (x.rol || 'ejecutivo') : (x.rolSolicitado || 'ejecutivo');
+  const candidatos = (Nube.solicitudes || []).filter(s => s.uid !== uid && s.estado === 'aprobado' && (s.rol || 'ejecutivo') === 'ejecutivo');
+  const eq = new Set(x.equipo || []);
+  openSheet(x.estado === 'aprobado' ? 'Rol y equipo' : 'Aprobar acceso', `
+    <p style="margin-top:0"><b>${esc(x.nombre || 'Usuario ' + x.usuario)}</b><br><span class="small muted">Usuario ${esc(x.usuario || '—')}${x.agencia ? ' · ' + esc(x.agencia) : ''}</span></p>
+    <div class="field"><label>Rol</label><select id="rolSel">${['ejecutivo', 'gerente', 'capacitador'].map(r => `<option value="${r}" ${r === rolIni ? 'selected' : ''}>${ROLES[r]}</option>`).join('')}</select>
+      <div class="hint" id="rolHint"></div></div>
+    <div id="equipoBox">
+      <div class="small" style="font-weight:650;margin-bottom:6px">Equipo del gerente (puede ver su cartera y trámites)</div>
+      ${candidatos.length ? `<div class="equipo-lista">${candidatos.map(c => `<label class="chk equipo-chk"><input type="checkbox" value="${esc(c.uid)}" ${eq.has(c.uid) ? 'checked' : ''}><span>${esc(c.nombre || 'Usuario ' + c.usuario)}${c.agencia ? ' · ' + esc(c.agencia) : ''}</span></label>`).join('')}</div>`
+        : '<div class="small muted">Todavía no hay ejecutivos aprobados para asignar.</div>'}
+    </div>
+    <button type="button" class="btn primary block" id="rolOk" style="margin-top:12px">${x.estado === 'aprobado' ? 'Guardar' : '✓ Aprobar'}</button>`, body => {
+    const sel = $('#rolSel', body);
+    const pinta = () => {
+      $('#equipoBox', body).hidden = sel.value !== 'gerente';
+      $('#rolHint', body).textContent = { ejecutivo: 'Ve y maneja solo su propia cartera.', gerente: 'Ve (sin modificar) la cartera y los trámites de los ejecutivos de su equipo.', capacitador: 'Ve (sin modificar) la cartera y los trámites de todos los ejecutivos.' }[sel.value];
+    };
+    sel.addEventListener('change', pinta); pinta();
+    $('#rolOk', body).addEventListener('click', async ev => {
+      const equipo = $$('#equipoBox input:checked', body).map(i => i.value);
+      if (sel.value === 'gerente' && !equipo.length && candidatos.length && !confirm('El gerente no tiene ejecutivos asignados. ¿Guardar igual?')) return;
+      ev.target.disabled = true;
+      try { await Nube.aprobar(x, sel.value, equipo); closeSheet(); toast(`${x.nombre || 'Usuario ' + x.usuario}: ${ROLES[sel.value]}`); }
+      catch (e) { ev.target.disabled = false; toast(e.code === 'permission-denied' ? 'Sin permiso: publica la regla nueva en Firebase' : e.message); }
+    });
+  });
+}
+
+/* ---------- Supervisión (administrador, capacitador y gerente): solo lectura ---------- */
+function viewEquipo(uid) {
+  if (!['admin', 'capacitador', 'gerente'].includes(window.Nube?.rol)) return '<div class="card empty">Esta sección es para gerentes, capacitadores y el administrador.</div>';
+  return uid ? `<div id="eqDetalle"><div class="card empty">Cargando cartera…</div></div>`
+    : `<p class="small muted" style="margin:0 2px 10px">${Nube.rol === 'gerente' ? 'Ejecutivos de tu equipo.' : 'Todos los ejecutivos.'} Puedes ver su cartera y trámites, pero no modificarlos.</p>
+       <div id="eqLista"><div class="card empty">Cargando…</div></div>`;
+}
+async function cargarEquipo() {
+  const uid = current.param;
+  ROUTES.equipo.back = uid ? '#/equipo' : '#/mas';
+  let dir;
+  try { dir = await Nube.directorio(); } catch (e) { const b = $('#eqLista') || $('#eqDetalle'); if (b) b.innerHTML = '<div class="card empty">No se pudo cargar. Revisa tu conexión.</div>'; return; }
+  const visibles = dir.filter(x => !x.esYo && (Nube.rol !== 'gerente' || (Nube.equipo || []).includes(x.uid)));
+  if (!uid) {
+    const box = $('#eqLista'); if (!box) return;
+    box.innerHTML = visibles.length ? `<div class="card tight">${visibles.map(x => `
+      <a class="list-item dir-item" href="#/equipo/${encodeURIComponent(x.uid)}">
+        <div class="dir-foto">${x.foto ? `<img src="${esc(x.foto)}" alt="">` : `<span>${esc(iniciales(x.nombre) || String(x.usuario || '?').slice(-2))}</span>`}</div>
+        <div class="grow"><div class="title">${esc(x.nombre || 'Usuario ' + x.usuario)}</div><div class="sub">${esc([x.agencia, x.usuario ? 'Usuario ' + x.usuario : ''].filter(Boolean).join(' · '))}</div></div>
+        <span class="muted">${ICONS.chev}</span></a>`).join('')}</div>`
+      : `<div class="card empty">${Nube.rol === 'gerente' ? 'Todavía no tienes ejecutivos asignados. El administrador los asigna en Solicitudes de acceso → Rol y equipo.' : 'Todavía no hay ejecutivos registrados.'}</div>`;
+    return;
+  }
+  const box = $('#eqDetalle'); if (!box) return;
+  const x = dir.find(d => d.uid === uid) || { nombre: '', uid };
+  $('#pageTitle').textContent = x.nombre || 'Ejecutivo';
+  let c;
+  try { c = await Nube.leerCartera(uid); }
+  catch (e) { box.innerHTML = `<div class="card empty">${e.code === 'permission-denied' ? 'No tienes permiso para ver esta cartera (o falta publicar la regla nueva en Firebase).' : 'No se pudo cargar la cartera.'}</div>`; return; }
+  const tot = c.clients.map(cl => ({ cl, total: clientTotal(cl) })).sort((a, b) => b.total - a.total);
+  const total = tot.reduce((s, t) => s + t.total, 0);
+  let mora = 0, nCred = 0;
+  c.clients.forEach(cl => activeCredits(cl).forEach(cr => { nCred++; if (cr.estado === 'mora') mora += creditBalance(cr); }));
+  const abiertos = c.cases.filter(caseOpen);
+  const enTramite = abiertos.reduce((s, k) => s + toBs(num(k.monto), k.moneda), 0);
+  box.innerHTML = `
+  <div class="card small muted">👁️ Solo lectura · ${esc([x.agencia, x.usuario ? 'Usuario ' + x.usuario : ''].filter(Boolean).join(' · '))}</div>
+  <div class="hero"><div class="label">Cartera total</div><div class="big num">Bs ${nf0.format(total)}</div>
+    <div class="meta"><div><b class="num">${c.clients.length}</b>clientes</div><div><b class="num">${nCred}</b>créditos</div><div><b class="num">${pct(total ? mora / total : 0, 1)}</b>mora</div></div></div>
+  <div class="grid-2">
+    <div class="card kpi"><div class="v num">${abiertos.length}</div><div class="l">Trámites en curso</div></div>
+    <div class="card kpi"><div class="v num">Bs ${nf0.format(enTramite)}</div><div class="l">Monto en trámite</div></div>
+  </div>
+  <div class="section-title">Clientes (${c.clients.length})</div>
+  ${tot.length ? `<div class="card tight">${tot.slice(0, 50).map(({ cl, total: t }) => `<div class="list-item"><div class="grow"><div class="title">${esc(cl.nombre || '—')}</div><div class="sub">${activeCredits(cl).length} crédito(s)${activeCredits(cl).some(cr => cr.estado === 'mora') ? ' · <span style="color:var(--red)">en mora</span>' : ''}</div></div><b class="num">Bs ${nf0.format(t)}</b></div>`).join('')}</div>` : '<div class="card empty">Sin clientes.</div>'}
+  <div class="section-title">Trámites en curso (${abiertos.length})</div>
+  ${abiertos.length ? `<div class="card tight">${abiertos.map(k => `<div class="list-item"><div class="grow"><div class="title">${esc(k.prospecto || (c.clients.find(cl => cl.id === k.clientId) || {}).nombre || 'Trámite')}</div><div class="sub">${esc(tipoInfo(k.tipo).label)} · ${esc(etapaInfo(k.etapa).label)}</div></div><b class="num">${esc(money(num(k.monto), k.moneda))}</b></div>`).join('')}</div>` : '<div class="card empty">Sin trámites en curso.</div>'}
+  <div class="section-title">Simulaciones guardadas (${c.sims.length})</div>
+  ${c.sims.length ? `<div class="card tight">${c.sims.slice(-20).reverse().map(sm => `<div class="list-item"><div class="grow"><div class="title">${esc(sm.nombre || 'Sin nombre')}</div><div class="sub">${esc(fmtDate(String(sm.actualizado || sm.creado || '').slice(0, 10)))}</div></div><b class="num">Bs ${nf2.format(num(sm.monto))}</b></div>`).join('')}</div>` : '<div class="card empty">Sin simulaciones.</div>'}`;
+}
+ROUTES.equipo.after = cargarEquipo;
