@@ -236,7 +236,8 @@ const ERRORES = {
   'auth/email-already-in-use': 'Ese usuario ya tiene cuenta. Ingresa con tu clave.',
   'auth/weak-password': 'La clave debe tener al menos 6 caracteres',
   'auth/operation-not-allowed': 'El registro todavía no está habilitado. Pide al administrador que lo active.',
-  'auth/admin-restricted-operation': 'El registro todavía no está habilitado. Pide al administrador que lo active.'
+  'auth/admin-restricted-operation': 'El registro todavía no está habilitado. Pide al administrador que lo active.',
+  'auth/requires-recent-login': 'Por seguridad, cierra sesión, vuelve a entrar e inténtalo de nuevo'
 };
 const ADMIN = USUARIO_LEGADO; // el administrador de la app (carga normas y aprueba ejecutivos)
 
@@ -270,14 +271,16 @@ $id('registroForm').addEventListener('submit', async ev => {
   ev.preventDefault();
   const err = $id('regErr'), btn = $id('regBtn');
   const usuario = $id('regUser').value.trim(), nombre = $id('regNombre').value.trim(), agencia = $id('regAgencia').value.trim();
+  const telefono = $id('regTel').value.trim();
   const clave = $id('regPass').value;
   err.textContent = '';
   if (!/^[\w.-]{3,}$/.test(usuario)) { err.textContent = 'Usuario no válido (solo números o letras, sin espacios)'; return; }
+  if (telefono.replace(/\D/g, '').length < 7) { err.textContent = 'Ingresa tu número de celular'; return; }
   if (clave !== $id('regPass2').value) { err.textContent = 'Las claves no coinciden'; return; }
   if (!auth) { err.textContent = 'Conectando… intenta en unos segundos'; return; }
   btn.disabled = true; btn.textContent = 'Creando cuenta…';
   // Se guardan antes de crear la cuenta: al iniciar la sesión se envían con la solicitud
-  registroPendiente = { usuario, nombre, agencia };
+  registroPendiente = { usuario, nombre, agencia, telefono };
   try {
     await authMod.createUserWithEmailAndPassword(auth, correoDe(usuario), clave);
     $id('regPass').value = $id('regPass2').value = '';
@@ -307,6 +310,7 @@ function escucharAcceso(user) {
       const st = Store.get().settings, r = registroPendiente || {};
       fs.setDoc(fs.doc(db, 'solicitudes', uidActual), limpio({
         usuario: Nube.usuario, nombre: r.nombre || st.ejecutivo || '', agencia: r.agencia || st.agencia || '',
+        telefono: r.telefono || st.telefonoEjecutivo || '',
         estado: 'pendiente', creado: new Date().toISOString()
       })).catch(e => console.warn('Solicitud', e.code || e.message));
     }
@@ -357,7 +361,7 @@ async function alIniciarSesion(user) {
   }
   Store.get().settings.nubeUid = user.uid;
   // Registro recién hecho: su nombre y agencia pasan a Ajustes (y a su perfil y ficha del directorio)
-  if (registroPendiente) Object.assign(Store.get().settings, { ejecutivo: registroPendiente.nombre, agencia: registroPendiente.agencia });
+  if (registroPendiente) Object.assign(Store.get().settings, { ejecutivo: registroPendiente.nombre, agencia: registroPendiente.agencia, telefonoEjecutivo: registroPendiente.telefono });
   Store.save();
   mostrarLogin(false);
   setEstado('conectando');
@@ -438,6 +442,13 @@ async function iniciar() {
     await fs.setDoc(fs.doc(db, 'directorio', uidActual), limpio({
       nombre: p.ejecutivo, agencia: p.agencia, telefono: p.telefonoEjecutivo, foto: p.foto, usuario: Nube.usuario, actualizado: ahora
     }), { merge: true }).catch(e => console.warn('Directorio', e.code || e.message));
+  };
+  // Cambiar la propia clave (Firebase pide confirmar la clave actual)
+  Nube.cambiarClave = async (actual, nueva) => {
+    const u = auth.currentUser;
+    if (!u) throw new Error('Inicia sesión');
+    await authMod.reauthenticateWithCredential(u, authMod.EmailAuthProvider.credential(u.email, actual));
+    await authMod.updatePassword(u, nueva);
   };
   Nube.aprobar = async x => {
     await fs.setDoc(fs.doc(db, 'aprobados', x.uid), limpio({ usuario: x.usuario || '', nombre: x.nombre || '', aprobado: new Date().toISOString(), por: Nube.usuario }));

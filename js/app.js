@@ -479,7 +479,7 @@ function viewSolicitudes() {
       <div class="list-item dir-item">
         <div class="dir-foto"><span>${esc(iniciales(x.nombre) || String(x.usuario || '?').slice(-2))}</span></div>
         <div class="grow"><div class="title">${esc(x.nombre || 'Sin nombre')}</div>
-          <div class="sub">${esc(['Usuario ' + (x.usuario || '—'), x.agencia, x.creado ? fmtDate(x.creado.slice(0, 10)) : ''].filter(Boolean).join(' · '))}</div></div>
+          <div class="sub">${esc(['Usuario ' + (x.usuario || '—'), x.agencia, x.telefono ? 'Cel. ' + x.telefono : '', x.creado ? fmtDate(x.creado.slice(0, 10)) : ''].filter(Boolean).join(' · '))}</div></div>
         <div class="sol-btns">${botones(x)}</div>
       </div>`).join('')}</div>` : '';
   const btn = (act, uid, txt, cls = '') => `<button type="button" class="btn sm ${cls}" data-act="${act}" data-uid="${esc(uid)}">${txt}</button>`;
@@ -1514,7 +1514,12 @@ function viewSettings() {
       <div class="small muted" style="margin-top:6px">Se aplica al instante y queda guardado en este dispositivo.</div>
     </div>
     <button class="btn primary block" type="submit">Guardar ajustes</button>
-  </form>`;
+  </form>
+  ${window.Nube?.usuario ? `<div class="section-title">Seguridad</div>
+  <div class="card tight"><a class="list-item" data-act="cambiarClave">
+    <div class="icon-dot">${ICONS.lock}</div>
+    <div class="grow"><div class="title">Cambiar mi clave</div><div class="sub">Usuario ${esc(Nube.usuario)}</div></div>
+    <span class="muted">${ICONS.chev}</span></a></div>` : ''}`;
 }
 ROUTES.ajustes.after = () => {
   const f = $('#fSettings');
@@ -1934,4 +1939,30 @@ Object.assign(ACTIONS, {
     try { await Nube.rechazar(x); toast('Acceso quitado'); }
     catch (e) { toast(e.code === 'permission-denied' ? 'Sin permiso: publica la regla nueva en Firebase' : e.message); }
   }
+});
+
+// Cambiar la propia clave
+ACTIONS.cambiarClave = () => openSheet('Cambiar mi clave', `
+  <form id="fClave">
+    ${field({ label: 'Clave actual', name: 'actual', type: 'password', required: true, attrs: 'autocomplete="current-password"' })}
+    ${field({ label: 'Clave nueva (mínimo 6 caracteres)', name: 'nueva', type: 'password', required: true, attrs: 'autocomplete="new-password" minlength="6"' })}
+    ${field({ label: 'Repite la clave nueva', name: 'nueva2', type: 'password', required: true, attrs: 'autocomplete="new-password" minlength="6"' })}
+    <p class="error-text" id="claveErr"></p>
+    <button class="btn primary block" type="submit">Cambiar clave</button>
+  </form>`, body => {
+  $('#fClave', body).addEventListener('submit', async ev => {
+    ev.preventDefault();
+    const d = formData(ev.target), err = $('#claveErr', body), btn = $('button[type=submit]', body);
+    err.textContent = '';
+    if (d.nueva.length < 6) { err.textContent = 'La clave nueva debe tener al menos 6 caracteres'; return; }
+    if (d.nueva !== d.nueva2) { err.textContent = 'Las claves nuevas no coinciden'; return; }
+    btn.disabled = true; btn.textContent = 'Cambiando…';
+    try { await Nube.cambiarClave(d.actual, d.nueva); closeSheet(); toast('Clave cambiada'); }
+    catch (e) {
+      err.textContent = ['auth/wrong-password', 'auth/invalid-credential', 'auth/invalid-login-credentials'].includes(e.code) ? 'La clave actual no es correcta'
+        : e.code === 'auth/requires-recent-login' ? 'Por seguridad, cierra sesión, vuelve a entrar e inténtalo de nuevo'
+        : e.code === 'auth/network-request-failed' ? 'Sin conexión a internet' : (e.message || 'No se pudo cambiar la clave');
+      btn.disabled = false; btn.textContent = 'Cambiar clave';
+    }
+  });
 });
