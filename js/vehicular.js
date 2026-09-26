@@ -7,7 +7,8 @@ const VEH = {
   edadMax: { anios: 70, dias: 360 },          // desgravamen vehicular: hasta 70 años y 360 días (sin cumplir 71)
   edadMaxConsumo: { anios: 65, dias: 360 },   // desgravamen consumo: hasta 65 años y 360 días (sin cumplir 66)
   edadCredito: 76,                            // el crédito no puede pasar de los 76 años del mayor
-  desgravamen: { titular: 1.250, mancomunado: 2.251 }, // % sobre saldo capital
+  desgravamen: { titular: 1.250, mancomunado: 2.251 }, // vehicular: % anual sobre saldo capital
+  desgravamenConsumo: { titular: 1.40, mancomunado: 2.80 }, // consumo: % anual sobre saldo capital
   dima: { titular: 0.36, mancomunado: 0.72 },          // % sobre saldo capital
   cesantia: 0.84,                              // consumo: seguro de cesantía, % anual por persona sobre saldo insoluto
   periodoSeguros: 12,                          // los % de seguros son anuales → se cobran /12 cada mes
@@ -67,6 +68,7 @@ function edadDe(fnac, hoy = new Date()) {
   return { anios, dias };
 }
 const edadMaxDe = V => (esConsumo(V) ? VEH.edadMaxConsumo : VEH.edadMax);
+const desgDe = V => (esConsumo(V) ? VEH.desgravamenConsumo : VEH.desgravamen);
 const elegible = (e, max = VEH.edadMax) => !!e && (e.anios < max.anios || (e.anios === max.anios && e.dias <= max.dias));
 const edadTxt = e => e ? `${e.anios} años y ${e.dias} días` : '—';
 
@@ -511,14 +513,14 @@ function vehCalc() {
   ajusta('dimaT', okT && V.desgT === 'si'); ajusta('dimaC', okC && V.desgC === 'si');
   const nDesg = (V.desgT === 'si') + (V.desgC === 'si');
   const nDima = (V.dimaT === 'si') + (V.dimaC === 'si');
-  const desg = nDesg === 2 ? VEH.desgravamen.mancomunado : nDesg === 1 ? VEH.desgravamen.titular : 0;
+  const desg = nDesg === 2 ? desgDe(V).mancomunado : nDesg === 1 ? desgDe(V).titular : 0;
   const dima = nDima === 2 ? VEH.dima.mancomunado : nDima === 1 ? VEH.dima.titular : 0;
   const quien = (t, c) => t && c ? 'Titular y codeudor' : t ? 'Titular' : c ? 'Codeudor' : '';
   const aplica = nDesg > 0;
   const desgTxt = aplica ? `${quien(V.desgT === 'si', V.desgC === 'si')} · ${pct3(desg)}% anual (${mensual(desg)}% mensual)` : 'Sin Desgravamen';
   const dimaTxt = dima ? `${quien(V.dimaT === 'si', V.dimaC === 'si')} · ${pct3(dima)}% anual (${mensual(dima)}% mensual)` : '';
   const info = $('#desgInfo');
-  if (info) info.textContent = aplica ? desgTxt : `1 persona ${pct3(VEH.desgravamen.titular)}% · 2 personas ${pct3(VEH.desgravamen.mancomunado)}% anual · hasta ${edadMaxDe(V).anios} años y ${edadMaxDe(V).dias} días`;
+  if (info) info.textContent = aplica ? desgTxt : `1 persona ${pct3(desgDe(V).titular)}% · 2 personas ${pct3(desgDe(V).mancomunado)}% anual · hasta ${edadMaxDe(V).anios} años y ${edadMaxDe(V).dias} días`;
   const dInfo = $('#dimaInfo');
   if (dInfo) dInfo.textContent = dima ? dimaTxt : aplica ? `1 persona ${pct3(VEH.dima.titular)}% · 2 personas ${pct3(VEH.dima.mancomunado)}% anual` : 'Solo para quien tiene Desgravamen';
 
