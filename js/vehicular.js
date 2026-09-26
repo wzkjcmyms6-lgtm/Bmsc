@@ -4,7 +4,8 @@
 'use strict';
 
 const VEH = {
-  edadMax: { anios: 70, dias: 360 },          // desgravamen: hasta 70 años y 360 días (sin cumplir 71)
+  edadMax: { anios: 70, dias: 360 },          // desgravamen vehicular: hasta 70 años y 360 días (sin cumplir 71)
+  edadMaxConsumo: { anios: 69, dias: 360 },   // desgravamen consumo: hasta 69 años y 360 días (sin cumplir 70)
   edadCredito: 76,                            // el crédito no puede pasar de los 76 años del mayor
   desgravamen: { titular: 1.250, mancomunado: 2.251 }, // % sobre saldo capital
   dima: { titular: 0.36, mancomunado: 0.72 },          // % sobre saldo capital
@@ -65,7 +66,8 @@ function edadDe(fnac, hoy = new Date()) {
   const dias = Math.floor((new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()) - cumple) / 86400000);
   return { anios, dias };
 }
-const elegible = e => !!e && (e.anios < VEH.edadMax.anios || (e.anios === VEH.edadMax.anios && e.dias <= VEH.edadMax.dias));
+const edadMaxDe = V => (esConsumo(V) ? VEH.edadMaxConsumo : VEH.edadMax);
+const elegible = (e, max = VEH.edadMax) => !!e && (e.anios < max.anios || (e.anios === max.anios && e.dias <= max.dias));
 const edadTxt = e => e ? `${e.anios} años y ${e.dias} días` : '—';
 
 function vehState() {
@@ -492,13 +494,13 @@ function vehCalc() {
   const eT = edadDe(V.fnac), eC = conCodeudor ? edadDe(V.cFnac) : null;
 
   // Edades en el formulario
-  const pintaEdad = (id, e) => { const b = $('#' + id); if (!b) return; b.textContent = e ? edadTxt(e) : 'Edad —'; b.className = 'badge ' + (!e ? 'gray' : elegible(e) ? '' : 'red'); };
+  const pintaEdad = (id, e) => { const b = $('#' + id); if (!b) return; b.textContent = e ? edadTxt(e) : 'Edad —'; b.className = 'badge ' + (!e ? 'gray' : elegible(e, edadMaxDe(V)) ? '' : 'red'); };
   pintaEdad('edad_t', eT); pintaEdad('edad_c', eC);
 
   // Desgravamen: el ejecutivo marca a quién cubre (nada viene marcado). Solo se puede marcar a quien
   // tiene hasta 70 años y 360 días. Uno marcado → tasa individual; los dos → tasa titular y codeudor.
   // DIMA: a elección, solo para quien tiene desgravamen marcado.
-  const okT = elegible(eT), okC = conCodeudor && elegible(eC);
+  const okT = elegible(eT, edadMaxDe(V)), okC = conCodeudor && elegible(eC, edadMaxDe(V));
   const ajusta = (name, permitido) => {
     const el = $(`#vehForm input[name=${name}]`);
     if (!permitido && V[name] === 'si') V[name] = '';
@@ -516,7 +518,7 @@ function vehCalc() {
   const desgTxt = aplica ? `${quien(V.desgT === 'si', V.desgC === 'si')} · ${pct3(desg)}% anual (${mensual(desg)}% mensual)` : 'Sin Desgravamen';
   const dimaTxt = dima ? `${quien(V.dimaT === 'si', V.dimaC === 'si')} · ${pct3(dima)}% anual (${mensual(dima)}% mensual)` : '';
   const info = $('#desgInfo');
-  if (info) info.textContent = aplica ? desgTxt : `1 persona ${pct3(VEH.desgravamen.titular)}% · 2 personas ${pct3(VEH.desgravamen.mancomunado)}% anual · hasta ${VEH.edadMax.anios} años y ${VEH.edadMax.dias} días`;
+  if (info) info.textContent = aplica ? desgTxt : `1 persona ${pct3(VEH.desgravamen.titular)}% · 2 personas ${pct3(VEH.desgravamen.mancomunado)}% anual · hasta ${edadMaxDe(V).anios} años y ${edadMaxDe(V).dias} días`;
   const dInfo = $('#dimaInfo');
   if (dInfo) dInfo.textContent = dima ? dimaTxt : aplica ? `1 persona ${pct3(VEH.dima.titular)}% · 2 personas ${pct3(VEH.dima.mancomunado)}% anual` : 'Solo para quien tiene Desgravamen';
 
