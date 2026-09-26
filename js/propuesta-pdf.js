@@ -26,7 +26,8 @@ function requisitosConsumo(u) {
   return [
     `Fotocopia de CI ${conCod ? 'del titular y del codeudor' : 'del titular'}`,
     `Últimas ${n} boletas de pago ${conIngC ? 'del titular y del codeudor' : 'del titular'}`,
-    'Firma de formularios'
+    'Firma de formularios',
+    ...(V.reqExtra || []).filter(Boolean)
   ];
 }
 
@@ -80,13 +81,15 @@ function generarPropuestaPDF(u) {
   if (V.codeudor === 'si') fila('Codeudor', persona(V.cNombre, V.cCi, V.cExt, u.eC));
   fila('Monto del crédito', bs(u.monto), true);
   fila('Plazo', `${u.plazo} meses (${u.plazo / 12} ${u.plazo === 12 ? 'año' : 'años'})`);
+  // Referencial: tasas como se pactan (variable = margen + TRe) y cuotas aproximadas
   fila('Tasa de interés', u.cVar
-    ? `${nf2.format(num(V.tasaFija))}% anual fija, meses 1 a ${u.fijo}; desde el mes ${u.fijo + 1}: ${nf2.format(num(V.margenVar))}% + TRe ${nf2.format(treMN())}% = ${nf2.format(u.tasaVar)}% anual`
-    : `${nf2.format(num(V.tasaFija))}% anual fija`);
-  fila(u.cVar ? `Cuota mensual (meses 1 a ${u.fijo})` : 'Cuota mensual', bs(u.c1.total), true);
-  if (u.cVar) fila(`Cuota desde el mes ${u.fijo + 1} (estimada)`, bs(u.cVar.total), true);
+    ? `Meses 1 a ${u.fijo}: ${nf2.format(num(V.tasaFija))}% fija · desde el mes ${u.fijo + 1}: ${nf2.format(num(V.margenVar))}% + TRe`
+    : `${nf2.format(num(V.tasaFija))}% fija todo el plazo`);
+  const alta = Math.max(u.c1.total, u.cVar ? u.cVar.total : 0);
+  fila('Cuota mensual aprox.', bs(u.c1.total), true);
+  if (alta > u.c1.total + 0.005) fila('Cuota más alta aprox.', bs(alta), true);
   const d = u.desglose(u.c1);
-  fila('Composición de la primera cuota', [`Capital + interés ${bs(d.capInt)}`, d.desg && `Desgravamen ${bs(d.desg)}`, d.dima && `DIMA ${bs(d.dima)}`, d.ces && `Cesantía ${bs(d.ces)}`].filter(Boolean).join(' · '));
+  fila('Composición de la primera cuota (aprox.)', [`Capital + interés ${bs(d.capInt)}`, d.desg && `Desgravamen ${bs(d.desg)}`, d.dima && `DIMA ${bs(d.dima)}`, d.ces && `Cesantía ${bs(d.ces)}`].filter(Boolean).join(' · '));
   fila('Seguro de Desgravamen', u.desgTxt);
   fila('Seguro DIMA', u.dima ? u.dimaTxt : 'No');
   fila('Seguro de Cesantía', u.ces ? u.cesTxt : 'No');

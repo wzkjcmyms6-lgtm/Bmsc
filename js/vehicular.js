@@ -704,7 +704,12 @@ function vehCalc() {
     ${consumo ? `<button class="btn sm primary" data-act="vehPDF">📄 Generar PDF</button>` : `<button class="btn sm" onclick="window.print()">🖨️ PDF</button>`}
   </div>
   ${consumo ? `<div class="veh-row no-print pdf-boletas"><div><span>Boletas de pago a solicitar</span><div class="small muted">Para los requisitos del PDF · explica al cliente según el caso</div></div>
-    <div class="seg-toggle">${['3', '6'].map(n => `<label><input type="radio" name="boletasPdf" value="${n}" ${(V.boletas === '6' ? '6' : '3') === n ? 'checked' : ''} data-act="vehBoletas"><span>${n}</span></label>`).join('')}</div></div>` : ''}
+    <div class="seg-toggle">${['3', '6'].map(n => `<label><input type="radio" name="boletasPdf" value="${n}" ${(V.boletas === '6' ? '6' : '3') === n ? 'checked' : ''} data-act="vehBoletas"><span>${n}</span></label>`).join('')}</div></div>
+  <div class="req-extra no-print">
+    <div><span class="req-extra-tit">Requisitos extra</span><div class="small muted">Se agregan al PDF y al mensaje de WhatsApp</div></div>
+    ${(V.reqExtra || []).length ? `<ul class="req-lista">${V.reqExtra.map((r, i) => `<li><span>✅ ${esc(r)}</span><button type="button" class="sim-del" data-act="vehReqDel" data-i="${i}" aria-label="Quitar">✕</button></li>`).join('')}</ul>` : ''}
+    <div class="sim-guardar-row"><input id="reqExtraTxt" type="text" autocomplete="off" placeholder="Ej. Certificado de trabajo"><button type="button" class="btn" data-act="vehReqAdd">+ Añadir</button></div>
+  </div>` : ''}
 
   <details class="card tight plan" ${V.verPlan ? 'open' : ''} id="vehPlan">
     <summary style="padding:14px;cursor:pointer;font-weight:700">📅 Plan de pagos (${plazo} cuotas)</summary>
@@ -716,6 +721,7 @@ function vehCalc() {
   </details>
   <p class="small muted">${consumo ? 'Desgravamen, DIMA y Cesantía' : 'Desgravamen y DIMA'}: tasa anual ÷ 12, aplicada cada mes sobre el saldo capital. Cuota variable estimada con la TRe vigente; puede cambiar cuando el BCB publique una nueva.</p>`;
   $('#vehPlan')?.addEventListener('toggle', e => { V.verPlan = e.target.open; guardarCalc(); });
+  $('#reqExtraTxt')?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); ACTIONS.vehReqAdd(); } });
   $('#simTel')?.addEventListener('input', e => {
     V.telefono = e.target.value; guardarCalc();
     const bw = $('#btnWa'); if (bw) bw.lastChild.textContent = ' ' + (V.telefono.trim() ? 'WhatsApp al cliente' : 'Compartir');
@@ -877,15 +883,19 @@ function mensajePropuesta(u) {
   if (!u.consumo) l.push(`🚘 *Vehículo:* ${V.estado === 'usado' ? 'usado' : 'nuevo'}, ${V.motor === 'hibrido' ? 'eléctrico/híbrido' : 'a gasolina'} · $us ${nf2.format(u.valorUsd)}`);
   l.push(`💰 *Monto:* ${bs(u.monto)}`);
   l.push(`📆 *Plazo:* ${u.plazo} meses (${nf0.format(u.plazo / 12)} ${u.plazo === 12 ? 'año' : 'años'})`);
-  l.push(`💳 *Cuota mensual:* *${bs(u.c1.total)}*`);
+  // Referencial: cuotas aproximadas y tasas como se pactan (la variable es margen + TRe)
+  const alta = Math.max(u.c1.total, u.cVar ? u.cVar.total : 0);
+  l.push(`💳 *Cuota mensual aprox.:* *${bs(u.c1.total)}*`);
+  if (alta > u.c1.total + 0.005) l.push(`📈 *Cuota más alta aprox.:* ${bs(alta)}`);
   if (u.cVar) {
-    l.push(`   ↳ meses 1 a ${u.fijo} · tasa fija ${nf2.format(num(V.tasaFija))}%`);
-    l.push(`   ↳ desde el mes ${u.fijo + 1}: ${bs(u.cVar.total)} aprox.`);
-  } else l.push(`   ↳ tasa fija ${nf2.format(num(V.tasaFija))}% todo el plazo`);
+    l.push(`📊 *Tasa de interés:*`);
+    l.push(`   ↳ meses 1 a ${u.fijo}: ${nf2.format(num(V.tasaFija))}% fija`);
+    l.push(`   ↳ desde el mes ${u.fijo + 1}: ${nf2.format(num(V.margenVar))}% + TRe`);
+  } else l.push(`📊 *Tasa de interés:* ${nf2.format(num(V.tasaFija))}% fija todo el plazo`);
   l.push(seguros.length ? `🛡️ *Seguros incluidos:* ${lista(seguros)}` : '🛡️ *Seguros:* sin Desgravamen');
   l.push(LINEA_MSJ);
   if (u.consumo && typeof requisitosConsumo === 'function') {
-    l.push('', '📋 *Requisitos:*', ...requisitosConsumo({ ...u, V: { ...V, boletas: vehState().boletas } }).map(r => `✅ ${r}`));
+    l.push('', '📋 *Requisitos:*', ...requisitosConsumo({ ...u, V: { ...V, boletas: vehState().boletas, reqExtra: vehState().reqExtra } }).map(r => `✅ ${r}`));
   }
   l.push('', `_Propuesta referencial del ${fmtDate(today())}, sujeta a evaluación y aprobación._`, '', '¿Avanzamos con tu solicitud? 🙌', firmaMsj());
   return l.join('\n');
@@ -989,7 +999,15 @@ Object.assign(ACTIONS, {
     calcState().veh = null; vehState().producto = producto; UI.simsAbierto = false; guardarCalc(); render();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   },
-  vehPDF: () => { const u = vehCalc.ultimo; if (u) compartirPropuestaPDF({ ...u, V: { ...u.V, boletas: vehState().boletas } }); },
+  vehPDF: () => { const u = vehCalc.ultimo; if (u) compartirPropuestaPDF({ ...u, V: { ...u.V, boletas: vehState().boletas, reqExtra: vehState().reqExtra } }); },
+  // Requisitos extra que añade el ejecutivo (salen en el PDF y en WhatsApp)
+  vehReqAdd: () => {
+    const inp = $('#reqExtraTxt'), t = (inp?.value || '').trim();
+    if (!t) { inp?.focus(); return; }
+    const V = vehState(); V.reqExtra = [...(V.reqExtra || []), t]; guardarCalc(); vehCalc();
+    setTimeout(() => $('#reqExtraTxt')?.focus(), 30);
+  },
+  vehReqDel: el => { const V = vehState(); (V.reqExtra || []).splice(+el.dataset.i, 1); guardarCalc(); vehCalc(); },
   vehBoletas: el => { vehState().boletas = el.value; guardarCalc(); },
   vehTcMax: el => { vehState().tcLimite = el.dataset.v; guardarCalc(); render(); },
   vehUsarMax: el => { const V = vehState(); V[esConsumo(V) ? 'montoCons' : 'compra'] = el.dataset.v.replace('.', ','); guardarCalc(); render(); },

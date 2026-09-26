@@ -596,3 +596,9 @@ table.tbl.tabla-norma th { white-space: normal; line-height: 1.2; vertical-align
 .tc-pago summary::-webkit-details-marker { display: none; }
 .tc-pago[open] summary { margin-bottom: 8px; }
 .prod-sel { flex-wrap: wrap; }
+
+/* Requisitos extra (consumo) */
+.req-extra { display: grid; gap: 8px; padding: 10px 0; border-top: 1px solid var(--border); }
+.req-extra-tit { font-weight: 600; }
+.req-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.req-lista li { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 6px 4px 6px 10px; font-size: 14px; }
