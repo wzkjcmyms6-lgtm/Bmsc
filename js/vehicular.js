@@ -8,6 +8,7 @@ const VEH = {
   edadCredito: 76,                            // el crédito no puede pasar de los 76 años del mayor
   desgravamen: { titular: 1.250, mancomunado: 2.251 }, // % sobre saldo capital
   dima: { titular: 0.36, mancomunado: 0.72 },          // % sobre saldo capital
+  cesantia: 0.84,                              // consumo: seguro de cesantía, % anual sobre saldo insoluto
   periodoSeguros: 12,                          // los % de seguros son anuales → se cobran /12 cada mes
   msc: { gasolina: 3.8, hibrido: 3.8 },        // % del valor del vehículo, se suma al monto a financiar
   plazos: [12, 24, 36, 48, 60, 72, 84, 96, 108, 120],
@@ -41,6 +42,10 @@ const VEH = {
   impuestoExterior: 13,                        // % que se descuenta a ingresos del exterior (referencial)
   treMN: 3.65, treVigencia: 'septiembre 2026'  // TRe MN publicada por el BCB (respaldo)
 };
+// Tipo de crédito del simulador: consumo o vehicular (mismos ratios de endeudamiento)
+const esConsumo = V => V.producto === 'consumo';
+// Números de sección (consumo no tiene "Vehículo a financiar")
+const SEC = V => esConsumo(V) ? { ingresos: 4, deudas: 5, fin: 6 } : { vehiculo: 4, ingresos: 5, deudas: 6, fin: 7 };
 const pct3 = v => new Intl.NumberFormat('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(v);
 const mensual = anual => new Intl.NumberFormat('es-BO', { minimumFractionDigits: 3, maximumFractionDigits: 4 }).format(anual / 12);
 const treMN = () => num(S().settings.treManual) || S().settings.tre?.mn || VEH.treMN;
@@ -156,10 +161,14 @@ function vehForm() {
 
   return `${historialSims(V)}
   <form id="vehForm" class="calc-form no-print" onsubmit="return false">
+    <div class="card prod-sel">
+      <div class="small muted">Tipo de crédito</div>
+      ${opciones('producto', esConsumo(V) ? 'consumo' : 'vehicular', [['consumo', '💳 Consumo'], ['vehicular', '🚗 Vehicular']])}
+    </div>
     <div class="veh-top card">
       <div><div class="small muted">Fecha de elaboración de la propuesta</div><b>${fmtDate(today())}</b></div>
       <div class="veh-top-der">
-        <span class="badge">🚗 Crédito vehicular</span>
+        <span class="badge">${esConsumo(V) ? '💳 Crédito de consumo' : '🚗 Crédito vehicular'}</span>
         <button type="button" class="btn sm veh-reset" data-act="vehSimNueva">↺ Resetear simulación</button>
       </div>
     </div>
@@ -175,6 +184,8 @@ function vehForm() {
         <div class="chk-group">${chk('desgT', V.desgT, 'Titular')}${V.codeudor === 'si' ? chk('desgC', V.desgC, 'Codeudor') : ''}</div></div>
       <div class="veh-row veh-seg"><div><span>Seguro DIMA</span><div class="small muted" id="dimaInfo"></div></div>
         <div class="chk-group">${chk('dimaT', V.dimaT, 'Titular')}${V.codeudor === 'si' ? chk('dimaC', V.dimaC, 'Codeudor') : ''}</div></div>
+      ${esConsumo(V) ? `<div class="veh-row veh-seg"><div><span>Seguro de cesantía</span><div class="small muted">${pct3(VEH.cesantia)}% anual sobre saldo insoluto (${mensual(VEH.cesantia)}% mensual)</div></div>
+        <div class="chk-group">${chk('cesantia', V.cesantia === '' ? '' : 'si', 'Incluir')}</div></div>` : ''}
     `)}
 
     ${seccion(3, 'Condiciones', `
@@ -190,7 +201,7 @@ function vehForm() {
       <div class="small muted" id="tasaVarInfo"></div>
     `)}
 
-    ${seccion(4, 'Vehículo a financiar', `
+    ${esConsumo(V) ? '' : seccion(4, 'Vehículo a financiar', `
       <div class="veh-row"><span>Vehículo</span>${opciones('estado', V.estado, [['nuevo', 'Nuevo'], ['usado', 'Usado']])}</div>
       <div class="veh-row"><span>Tipo de motor</span>${opciones('motor', V.motor, [['gasolina', 'A gasolina'], ['hibrido', 'Eléctrico / híbrido']])}</div>
       <div class="fields-2">
@@ -201,7 +212,7 @@ function vehForm() {
       <div class="veh-row"><div><span>¿Seguro automotor MSC?</span><div class="small muted" id="mscInfo"></div></div>${siNo('msc', V.msc)}</div>
     `)}
 
-    ${seccion(5, 'Ingresos', `
+    ${seccion(SEC(V).ingresos, 'Ingresos', `
       ${ingresoPersona(V, 'T', 'Titular')}
       ${V.codeudor === 'si' && V.ingC === 'si'
         ? ingresoPersona(V, 'C', 'Codeudor', `<button type="button" class="link-btn" data-act="vehIngC" data-v="no">Quitar</button>`)
@@ -218,7 +229,7 @@ function vehForm() {
       <div class="small muted">El 25% (TC, N y crédito nuevo) se calcula sobre el ingreso mensual. El aguinaldo, las primas y los bonos solo cuentan para el límite total con vivienda.</div>` : ''}
     `)}
 
-    ${seccion(6, 'Servicio de deudas mensual', `
+    ${seccion(SEC(V).deudas, 'Servicio de deudas mensual', `
       <div class="deudas-head small muted"><span>Código</span><span>Cuota mensual (Bs)</span><span></span></div>
       <div id="deudas">${V.deudas.map((d, i) => `
         <div class="deuda-item ${d.cod === 'TC' ? 'es-tc' : ''}">
@@ -243,7 +254,14 @@ function vehForm() {
       <div id="capBox"></div>
     `)}
 
-    ${seccion(7, 'Financiamiento', `
+    ${seccion(SEC(V).fin, 'Financiamiento', esConsumo(V) ? `
+      <div id="finMax"></div>
+      <div class="fin-linea">
+        <div><span>Monto del crédito</span><div class="small muted">Monto que solicita el cliente</div></div>
+        <div class="fin-input"><span>Bs</span><input name="montoCons" type="text" inputmode="decimal" placeholder="0,00" value="${esc(V.montoCons || '')}"></div>
+      </div>
+      <div class="fin-total"><span>Monto a financiar</span><b class="num" id="finTotal">—</b></div>
+    ` : `
       <div id="finMax"></div>
       <div class="fin-linea">
         <div><span>Compra de vehículo</span><div class="small muted" id="finPct">Monto que financia el banco según la campaña</div></div>
@@ -269,7 +287,7 @@ function historialSims(V) {
     ${sims.length ? `<div class="sims-lista">${sims.map(x => `
       <div class="sim-item ${x.id === V.simId ? 'activa' : ''}">
         <button type="button" class="sim-abrir" data-act="vehSimAbrir" data-id="${esc(x.id)}">
-          <b>${esc(x.nombre || 'Sin nombre')}</b>
+          <b>${x.datos?.producto === 'consumo' ? '💳' : '🚗'} ${esc(x.nombre || 'Sin nombre')}</b>
           <span class="num">Bs ${nf2.format(num(x.monto))}${x.cuota ? ` · cuota Bs ${nf2.format(num(x.cuota))}` : ''}</span>
           <span class="small muted">${fmtDate((x.actualizado || x.creado || '').slice(0, 10))}${x.telefono ? ' · 📞 ' + esc(x.telefono) : ''}${x.plazo ? ' · ' + x.plazo + ' meses' : ''}</span>
         </button>
@@ -419,11 +437,11 @@ function tcLimiteHtml(k) {
   return `<details class="tc-lim" id="tcLim" ${UI.tcLimAbierto ? 'open' : ''}>
     <summary>💳 ¿Cuánto límite de tarjeta le puedo dar?</summary>
     ${!L ? '<div class="small muted" style="margin-top:6px">Faltan los parámetros de tarjetas en este dispositivo.</div>' : `
-    <div class="small muted" style="margin:6px 0">Con la cuota libre de <b class="num">Bs ${nf2.format(k.maxNueva)}</b> (deudas actuales, sin el crédito vehicular de esta simulación):</div>
+    <div class="small muted" style="margin:6px 0">Con la cuota libre de <b class="num">Bs ${nf2.format(k.maxNueva)}</b> (deudas actuales, sin el crédito de esta simulación):</div>
     ${L.map(c => `<div class="row between tc-lim-fila"><span>${esc(c.corto)}</span>${c.alcanza
       ? `<b class="num">${c.tope ? `Bs ${nf0.format(c.tope)} o más` : `hasta Bs ${nf0.format(c.lim)}`}</b>`
       : `<span class="small" style="color:var(--red)">No alcanza (mínimo Bs ${nf0.format(c.minimo)})</span>`}</div>`).join('')}
-    <div class="small muted" style="margin-top:6px">Si también toma el crédito vehicular, ambos comparten la misma capacidad de pago.</div>`}
+    <div class="small muted" style="margin-top:6px">Si también toma el crédito simulado, ambos comparten la misma capacidad de pago.</div>`}
   </details>`;
 }
 function pintaCapacidad(V, cuotaNueva) {
@@ -432,7 +450,7 @@ function pintaCapacidad(V, cuotaNueva) {
   const box = $('#capBox');
   if (!box) return null;
   const k = capacidadDeudas(V, cuotaNueva);
-  if (!k.mensual) { box.innerHTML = '<div class="card empty small" style="margin:12px 0 0">Ingresa los ingresos (sección 5) para evaluar la capacidad de pago.</div>'; return k; }
+  if (!k.mensual) { box.innerHTML = `<div class="card empty small" style="margin:12px 0 0">Ingresa los ingresos (sección ${SEC(V).ingresos}) para evaluar la capacidad de pago.</div>`; return k; }
   const barra = (pctUsado, limite, ok) => `<div class="bar" style="height:10px;margin-top:4px"><span style="width:${Math.min(100, pctUsado / limite * 100)}%;background:${ok ? 'var(--green-600)' : 'var(--red)'}"></span></div>`;
   box.innerHTML = `
   <div class="cap-box ${cuotaNueva ? (k.cumple ? 'ok' : 'no') : ''}">
@@ -501,9 +519,11 @@ function vehCalc() {
   const valorUsd = num(V.valorUsd);
   const valor = valorUsd * tcVeh;
   const pctMSC = VEH.msc[V.motor] || VEH.msc.gasolina;
-  const primaMSC = V.msc === 'si' ? valor * pctMSC / 100 : 0;
+  const consumo = esConsumo(V);
+  const primaMSC = !consumo && V.msc === 'si' ? valor * pctMSC / 100 : 0;
   // Monto a financiar (sección 7): compra de vehículo (lo define el ejecutivo según campaña) + seguro BMSC
-  const compra = num(V.compra);
+  // Consumo: el monto lo pone el ejecutivo directamente (sin vehículo ni seguro automotor)
+  const compra = consumo ? num(V.montoCons) : num(V.compra);
   const monto = compra > 0 ? compra + primaMSC : 0;
   const fs = $('#finSeg'); if (fs) fs.textContent = primaMSC ? `Bs ${nf2.format(primaMSC)}` : 'No';
   const fsi = $('#finSegInfo'); if (fsi) fsi.textContent = primaMSC ? `${V.motor === 'hibrido' ? 'Eléctrico / híbrido' : 'A gasolina'} ${nf2.format(pctMSC)}% del valor del vehículo (sección 4)` : 'No se eligió seguro automotor en la sección 4';
@@ -544,7 +564,8 @@ function vehCalc() {
   // Monto máximo (sección 7): la cuota más alta del crédito no puede pasar la cuota máxima que deja la
   // capacidad de pago (sección 6). La cuota (capital + interés + seguros) es proporcional al monto,
   // así que se calcula la cuota de Bs 100.000 y se escala.
-  const segMensual = (desg + dima) / VEH.periodoSeguros; // % mensual sobre saldo
+  const ces = consumo && V.cesantia !== '' ? VEH.cesantia : 0; // cesantía: solo consumo
+  const segMensual = (desg + dima + ces) / VEH.periodoSeguros; // % mensual sobre saldo
   const planDe = mto => generarPlan({ monto: mto, n: plazo, tasa: num(V.tasaFija), sistema: 'frances', gracia: 0, mesesFijos: fijo < plazo ? fijo : 0, tasaVar, desg: segMensual, seguroMes: 0, fecha: today() });
   const cuotaMaxDe = pl => Math.max(pl.rows[0].total, fijo < plazo ? pl.rows[fijo].total : 0);
   const base = 100000, cuotaBase = cuotaMaxDe(planDe(base));
@@ -553,14 +574,16 @@ function vehCalc() {
   const compraMax = Math.max(0, montoMax - primaMSC);
   const fm = $('#finMax');
   if (fm) fm.innerHTML = !kMax.mensual
-    ? '<div class="fin-max vacio small">Ingresa los ingresos (sección 5) para calcular el monto máximo a financiar.</div>'
+    ? `<div class="fin-max vacio small">Ingresa los ingresos (sección ${SEC(V).ingresos}) para calcular el monto máximo a financiar.</div>`
     : `<div class="fin-max ${compra > compraMax + 0.005 ? 'excede' : ''}">
-        <div class="row between"><span>Monto máximo a financiar</span><b class="num">Bs ${nf2.format(montoMax)}</b></div>
-        <div class="small muted">Cuota máxima Bs ${nf2.format(kMax.maxNueva)} (capacidad de pago${kMax.conVivienda && kMax.limitaVivienda ? ', limitada por el total con vivienda' : ''}${kMax.sinNorma ? ', sin evaluar el límite con vivienda' : ''}) · ${plazo} meses · ${nf2.format(num(V.tasaFija))}%${fijo < plazo ? ` / ${nf2.format(tasaVar)}%` : ''}${desg ? ' · con seguros' : ''}</div>
-        ${primaMSC ? `<div class="small muted">− Seguro vehicular BMSC Bs ${nf2.format(primaMSC)}</div>` : ''}
+        <div class="row between"><span>Monto máximo ${consumo ? 'del crédito' : 'a financiar'}</span><b class="num">Bs ${nf2.format(montoMax)}</b></div>
+        <div class="small muted">Cuota máxima Bs ${nf2.format(kMax.maxNueva)} (capacidad de pago${kMax.conVivienda && kMax.limitaVivienda ? ', limitada por el total con vivienda' : ''}${kMax.sinNorma ? ', sin evaluar el límite con vivienda' : ''}) · ${plazo} meses · ${nf2.format(num(V.tasaFija))}%${fijo < plazo ? ` / ${nf2.format(tasaVar)}%` : ''}${desg || ces ? ' · con seguros' : ''}</div>
+        ${consumo ? '' : `${primaMSC ? `<div class="small muted">− Seguro vehicular BMSC Bs ${nf2.format(primaMSC)}</div>` : ''}
         <div class="row between fin-max-compra"><span>Compra máxima de vehículo</span><b class="num">Bs ${nf2.format(compraMax)}</b></div>
         ${valor ? `<div class="small muted">${nf2.format(compraMax / valor * 100)}% del valor del vehículo${compraMax > valor ? ' · la capacidad alcanza para más que el valor del vehículo' : ''}</div>` : ''}
         ${compra > compraMax + 0.005 ? `<div class="small fin-max-aviso">⚠️ La compra ingresada supera el máximo en Bs ${nf2.format(compra - compraMax)}</div>` : ''}
+`}
+        ${consumo && compra > compraMax + 0.005 ? `<div class="small fin-max-aviso">⚠️ El monto ingresado supera el máximo en Bs ${nf2.format(compra - compraMax)}</div>` : ''}
         ${compraMax > 0 ? `<button type="button" class="btn sm" data-act="vehUsarMax" data-v="${compraMax.toFixed(2)}">Usar el máximo</button>` : ''}
       </div>`;
 
@@ -572,8 +595,8 @@ function vehCalc() {
   if (mayor && plazoMax < 12) avisos.push(`El mayor de los clientes ya no puede tomar un crédito de al menos 12 meses sin pasar los ${VEH.edadCredito} años.`);
   else if (mayor && V.plazoAjustado && plazo === plazoMax) avisos.push(`Plazo ajustado a ${plazoMax} meses: el crédito no puede pasar de los ${VEH.edadCredito} años del mayor.`);
   const deudasViv = V.deudas.some(d => grupoDe(d.cod) !== 'consumo');
-  if (V.vivienda === 'si' && !deudasViv) avisos.push('Indicaste que tiene crédito de vivienda: registra su cuota en la sección 6 (códigos H0–H4) para aplicar el límite total con vivienda.');
-  if (V.vivienda !== 'si' && deudasViv) avisos.push('Registraste deudas de vivienda en la sección 6: en Ingresos marca "¿Tiene crédito de vivienda? Sí" si quieres tomar aguinaldo, primas o bonos.');
+  if (V.vivienda === 'si' && !deudasViv) avisos.push(`Indicaste que tiene crédito de vivienda: registra su cuota en la sección ${SEC(V).deudas} (códigos H0–H4) para aplicar el límite total con vivienda.`);
+  if (V.vivienda !== 'si' && deudasViv) avisos.push(`Registraste deudas de vivienda en la sección ${SEC(V).deudas}: en Ingresos marca "¿Tiene crédito de vivienda? Sí" si quieres tomar aguinaldo, primas o bonos.`);
   if (num(V.periodoFijo) > plazo) avisos.push(`El periodo de tasa fija no puede superar el plazo (${plazo} meses).`);
   if (!(monto > 0)) {
     out.innerHTML = `
@@ -591,7 +614,7 @@ function vehCalc() {
         <dt>Plazo</dt><dd>${plazo} meses (${plazo / 12} ${plazo === 12 ? 'año' : 'años'})</dd>
       </dl>
     </div>
-    <div class="card empty small">💡 Ingresa el monto de compra de vehículo (sección 7) para calcular la cuota.</div>`;
+    <div class="card empty small">💡 ${esConsumo(V) ? 'Ingresa el monto del crédito' : 'Ingresa el monto de compra de vehículo'} (sección ${SEC(V).fin}) para calcular la cuota.</div>`;
     pintaCapacidad(V, 0);
     vehCalc.ultimo = null;
     return;
@@ -615,6 +638,7 @@ function vehCalc() {
         <span>Capital + interés <b class="num">${fmt(x.cuota, m)}</b></span>
         ${desg ? `<span>Desgravamen <b class="num">${fmt(parte(x, desg), m)}</b></span>` : ''}
         ${dima ? `<span>DIMA <b class="num">${fmt(parte(x, dima), m)}</b></span>` : ''}
+        ${ces ? `<span>Cesantía <b class="num">${fmt(parte(x, ces), m)}</b></span>` : ''}
         <span>Tasa <b class="num">${nf2.format(x.tasa)}%</b></span>
       </div>
     </div>`;
@@ -639,21 +663,22 @@ function vehCalc() {
   <div class="card">
     <div class="veh-res-title">Resumen del financiamiento</div>
     <dl class="kv">
-      <dt>Vehículo</dt><dd>${V.estado === 'usado' ? 'Usado' : 'Nuevo'} · ${V.motor === 'hibrido' ? 'eléctrico / híbrido' : 'a gasolina'}</dd>
+      ${consumo ? `<dt>Crédito</dt><dd>Consumo</dd>` : `<dt>Vehículo</dt><dd>${V.estado === 'usado' ? 'Usado' : 'Nuevo'} · ${V.motor === 'hibrido' ? 'eléctrico / híbrido' : 'a gasolina'}</dd>
       <dt>Valor del vehículo</dt><dd class="num">$us ${nf2.format(valorUsd)} × ${nf2.format(tcVeh)} = ${fmt(valor, m)}</dd>
-      <dt>Compra de vehículo</dt><dd class="num">${fmt(compra, m)}${valor ? ` (${nf2.format(compra / valor * 100)}%)` : ''}</dd>
+      <dt>Compra de vehículo</dt><dd class="num">${fmt(compra, m)}${valor ? ` (${nf2.format(compra / valor * 100)}%)` : ''}</dd>`}
       ${primaMSC ? `<dt>Seguro vehicular BMSC (${nf2.format(pctMSC)}%)</dt><dd class="num">+ ${fmt(primaMSC, m)}</dd>` : ''}
       <dt><b>Monto a financiar</b></dt><dd class="num"><b>${fmt(monto, m)}</b></dd>
       <dt>Plazo</dt><dd>${plazo} meses (${plazo / 12} ${plazo === 12 ? 'año' : 'años'})</dd>
       ${cap && cap.mensual ? `<dt>Capacidad de pago</dt><dd>${(cap.sinNorma || cap.sinTarjetas) && cap.okCons ? '⚠️ Incompleto (faltan parámetros)' : cap.cumple ? '✅ Cumple' : '❌ No cumple'} · máx. Bs ${nf2.format(cap.maxNueva)}</dd>` : ''}
       <dt>Desgravamen</dt><dd>${esc(desgTxt)}</dd>
       <dt>DIMA</dt><dd>${dima ? esc(dimaTxt) : 'No'}</dd>
+      ${consumo ? `<dt>Cesantía</dt><dd>${ces ? `${pct3(ces)}% anual sobre saldo` : 'No'}</dd>` : ''}
     </dl>
   </div>
 
   <div class="grid-2">
     <div class="card kpi"><div class="v num">${fmt(plan.totales.interes, m)}</div><div class="l">Total intereses</div></div>
-    <div class="card kpi"><div class="v num">${fmt(plan.totales.desg, m)}</div><div class="l">Total seguros (desgravamen + DIMA)</div></div>
+    <div class="card kpi"><div class="v num">${fmt(plan.totales.desg, m)}</div><div class="l">Total seguros (${consumo ? 'desgravamen, DIMA y cesantía' : 'desgravamen + DIMA'})</div></div>
     <div class="card kpi"><div class="v num">${fmt(plan.totales.total, m)}</div><div class="l">Total a pagar</div></div>
     <div class="card kpi"><div class="v num">${pct(teac, 2)}</div><div class="l">Costo efectivo anual (TEAC)</div></div>
   </div>
@@ -673,21 +698,22 @@ function vehCalc() {
       </tbody></table>
     </div>
   </details>
-  <p class="small muted">Desgravamen y DIMA: tasa anual ÷ 12, aplicada cada mes sobre el saldo capital. Cuota variable estimada con la TRe vigente; puede cambiar cuando el BCB publique una nueva.</p>`;
+  <p class="small muted">${consumo ? 'Desgravamen, DIMA y cesantía' : 'Desgravamen y DIMA'}: tasa anual ÷ 12, aplicada cada mes sobre el saldo capital. Cuota variable estimada con la TRe vigente; puede cambiar cuando el BCB publique una nueva.</p>`;
   $('#vehPlan')?.addEventListener('toggle', e => { V.verPlan = e.target.open; guardarCalc(); });
   $('#simTel')?.addEventListener('input', e => { V.telefono = e.target.value; guardarCalc(); });
-  vehCalc.ultimo = { V: { ...V }, monto, c1, cVar, plazo, fijo, tasaVar, desgTxt, dima, primaMSC, aplica, valor, valorUsd, tcVeh, compra };
+  vehCalc.ultimo = { V: { ...V }, monto, c1, cVar, plazo, fijo, tasaVar, desgTxt, dima, ces, consumo, primaMSC, aplica, valor, valorUsd, tcVeh, compra };
 }
 
 /* ---------------- Enlace con la app ---------------- */
 ROUTES.calculadora.render = () => vehForm() + `<p class="small muted center no-print">Cálculos referenciales. Aplica siempre la normativa interna vigente del banco.</p>`;
 ROUTES.calculadora.after = () => {
   const V = vehState();
+  $('#pageTitle').textContent = esConsumo(V) ? 'Simulador de consumo' : 'Simulador vehicular';
   const form = $('#vehForm');
   if (!form) return;
   $('#simsHist')?.addEventListener('toggle', e => { UI.simsAbierto = e.target.open; });
   $('#vehForm')?.addEventListener('toggle', e => { if (e.target.id === 'tcLim') UI.tcLimAbierto = e.target.open; }, true);
-  const rerender = ['codeudor', 'plazo', 'tipoT', 'tipoC', 'vivienda', 'ingC', 'primas'];
+  const rerender = ['producto', 'codeudor', 'plazo', 'tipoT', 'tipoC', 'vivienda', 'ingC', 'primas'];
   // (motor, estado y seguro automotor se recalculan sin redibujar)
   const onChange = e => {
     Object.entries(formData(form)).forEach(([k, v]) => {
@@ -752,20 +778,20 @@ Object.assign(ACTIONS, {
   },
   vehSimNueva: () => {
     if (!confirm('¿Resetear la simulación? Se borran los datos del formulario (lo guardado en el historial se mantiene).')) return;
-    calcState().veh = null; vehState(); UI.simsAbierto = false; guardarCalc(); render();
+    const producto = vehState().producto; // se mantiene el tipo de crédito elegido
+    calcState().veh = null; vehState().producto = producto; UI.simsAbierto = false; guardarCalc(); render();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   },
-  vehUsarMax: el => { vehState().compra = el.dataset.v.replace('.', ','); guardarCalc(); render(); },
+  vehUsarMax: el => { const V = vehState(); V[esConsumo(V) ? 'montoCons' : 'compra'] = el.dataset.v.replace('.', ','); guardarCalc(); render(); },
   vehDeudaDel: el => { vehState().deudas.splice(+el.dataset.i, 1); guardarCalc(); render(); },
   vehCompartir: () => {
     const u = vehCalc.ultimo; if (!u) return;
     const m = 'BOB';
-    const text = `*Propuesta de crédito vehicular* (${fmtDate(today())})
-${u.V.nombre ? 'Cliente: ' + u.V.nombre + '\n' : ''}Vehículo ${u.V.estado === 'usado' ? 'usado' : 'nuevo'} (${u.V.motor === 'hibrido' ? 'eléctrico/híbrido' : 'a gasolina'}) · valor $us ${nf2.format(u.valorUsd)} = ${fmt(u.valor, m)} (TC ${nf2.format(u.tcVeh)})
-Monto a financiar: ${fmt(u.monto, m)}
+    const text = `*Propuesta de crédito ${u.consumo ? 'de consumo' : 'vehicular'}* (${fmtDate(today())})
+${u.V.nombre ? 'Cliente: ' + u.V.nombre + '\n' : ''}${u.consumo ? '' : `Vehículo ${u.V.estado === 'usado' ? 'usado' : 'nuevo'} (${u.V.motor === 'hibrido' ? 'eléctrico/híbrido' : 'a gasolina'}) · valor $us ${nf2.format(u.valorUsd)} = ${fmt(u.valor, m)} (TC ${nf2.format(u.tcVeh)})\n`}Monto a financiar: ${fmt(u.monto, m)}
 Plazo: ${u.plazo} meses
 Cuota mensual: *${fmt(u.c1.total, m)}*${u.cVar ? ` (meses 1-${u.fijo}); desde el mes ${u.fijo + 1}: ${fmt(u.cVar.total, m)} aprox.` : ''}
-${u.aplica ? `Incluye desgravamen${u.dima ? ' y DIMA' : ''}` : 'Sin desgravamen'}${u.primaMSC ? '; seguro automotor financiado' : ''}.
+${u.aplica ? `Incluye desgravamen${u.dima ? ' y DIMA' : ''}` : 'Sin desgravamen'}${u.ces ? '; seguro de cesantía' : ''}${u.primaMSC ? '; seguro automotor financiado' : ''}.
 Sujeto a evaluación y aprobación.
 ${S().settings.ejecutivo || ''} - Banco Mercantil Santa Cruz`;
     if (navigator.share) navigator.share({ text }).catch(() => {});
@@ -773,7 +799,7 @@ ${S().settings.ejecutivo || ''} - Banco Mercantil Santa Cruz`;
   },
   vehTramite: () => {
     const u = vehCalc.ultimo; if (!u) return;
-    caseForm({}, { tipo: 'vehicular', monto: Math.round(u.monto * 100) / 100, moneda: 'BOB', tasa: num(u.V.tasaFija), plazo: u.plazo, prospecto: u.V.nombre, destino: `Vehículo ${u.V.estado === 'usado' ? 'usado' : 'nuevo'}` });
+    caseForm({}, { tipo: u.consumo ? 'consumo' : 'vehicular', monto: Math.round(u.monto * 100) / 100, moneda: 'BOB', tasa: num(u.V.tasaFija), plazo: u.plazo, prospecto: u.V.nombre, destino: u.consumo ? 'Consumo' : `Vehículo ${u.V.estado === 'usado' ? 'usado' : 'nuevo'}` });
   }
 });
 

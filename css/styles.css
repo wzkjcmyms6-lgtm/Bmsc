@@ -567,3 +567,7 @@ table.tbl.tabla-norma th { white-space: normal; line-height: 1.2; vertical-align
 .tc-lim summary { font-weight: 650; cursor: pointer; color: var(--green-600); }
 .tc-lim-fila { padding: 5px 0; gap: 10px; }
 .tc-lim-fila b { color: var(--green-600); white-space: nowrap; }
+
+/* Selector de tipo de crédito */
+.prod-sel { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.prod-sel .seg-toggle { flex-shrink: 0; }
