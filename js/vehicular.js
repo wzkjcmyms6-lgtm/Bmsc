@@ -5,7 +5,7 @@
 
 const VEH = {
   edadMax: { anios: 70, dias: 360 },          // desgravamen vehicular: hasta 70 años y 360 días (sin cumplir 71)
-  edadMaxConsumo: { anios: 69, dias: 360 },   // desgravamen consumo: hasta 69 años y 360 días (sin cumplir 70)
+  edadMaxConsumo: { anios: 65, dias: 360 },   // desgravamen consumo: hasta 65 años y 360 días (sin cumplir 66)
   edadCredito: 76,                            // el crédito no puede pasar de los 76 años del mayor
   desgravamen: { titular: 1.250, mancomunado: 2.251 }, // % sobre saldo capital
   dima: { titular: 0.36, mancomunado: 0.72 },          // % sobre saldo capital
