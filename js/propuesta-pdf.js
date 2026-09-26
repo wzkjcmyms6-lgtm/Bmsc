@@ -50,7 +50,7 @@ function generarPropuestaPDF(u) {
   doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
   doc.text(fmtDate(today()), W - M, 11, { align: 'right' });
   let y = 40;
-  const ejecutivo = [st.ejecutivo, st.agencia].filter(Boolean).join(' · ');
+  const ejecutivo = [st.ejecutivo, st.agencia, st.telefonoEjecutivo && `Cel. ${st.telefonoEjecutivo}`].filter(Boolean).join(' · ');
   if (ejecutivo) { doc.setTextColor(...gris); doc.setFontSize(9.5); doc.text(`Ejecutivo de cuenta: ${ejecutivo}`, M, y); y += 8; }
 
   const titulo = t => {

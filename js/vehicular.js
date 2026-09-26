@@ -812,7 +812,7 @@ Plazo: ${u.plazo} meses
 Cuota mensual: *${fmt(u.c1.total, m)}*${u.cVar ? ` (meses 1-${u.fijo}); desde el mes ${u.fijo + 1}: ${fmt(u.cVar.total, m)} aprox.` : ''}
 ${u.aplica ? `Incluye desgravamen${u.dima ? ' y DIMA' : ''}` : 'Sin desgravamen'}${u.ces ? '; seguro de cesantía' : ''}${u.primaMSC ? '; seguro automotor financiado' : ''}.
 Sujeto a evaluación y aprobación.
-${S().settings.ejecutivo || ''} - Banco Mercantil Santa Cruz`;
+${S().settings.ejecutivo || ''} - Banco Mercantil Santa Cruz${S().settings.telefonoEjecutivo ? `\nCel. ${S().settings.telefonoEjecutivo}` : ''}`;
     // Con el teléfono registrado se abre directamente el chat de WhatsApp del cliente
     const tel = ($('#simTel')?.value || vehState().telefono || '').trim();
     if (phoneDigits(tel).length >= 8) window.open(waLink(tel, text), '_blank');

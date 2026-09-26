@@ -1363,6 +1363,7 @@ function viewSettings() {
     <div class="card">
       ${field({ label: 'Tu nombre', name: 'ejecutivo', value: st.ejecutivo, placeholder: 'Nombre del ejecutivo' })}
       ${field({ label: 'Agencia / sucursal', name: 'agencia', value: st.agencia, placeholder: 'Ej. Agencia Equipetrol' })}
+      ${field({ label: 'Tu número de teléfono', name: 'telefonoEjecutivo', type: 'tel', value: st.telefonoEjecutivo || '', placeholder: '7XXXXXXX', hint: 'Aparece en el PDF de la propuesta y en los mensajes al cliente' })}
     </div>
     <div class="section-title">Metas mensuales</div>
     <div class="card">
@@ -1404,7 +1405,7 @@ ROUTES.ajustes.after = () => {
     ev.preventDefault();
     const d = formData(ev.target);
     Object.assign(S().settings, {
-      ejecutivo: d.ejecutivo.trim(), agencia: d.agencia.trim(),
+      ejecutivo: d.ejecutivo.trim(), agencia: d.agencia.trim(), telefonoEjecutivo: (d.telefonoEjecutivo || '').trim(),
       metaMensual: num(d.metaMensual), metaClientes: parseInt(d.metaClientes, 10) || 0,
       tcModo: d.tcModo === 'manual' && num(d.tc) ? 'manual' : 'auto', tcTipo: d.tcTipo || 'tco', tc: num(d.tc) || '',
       theme: d.theme || S().settings.theme
