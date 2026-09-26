@@ -185,11 +185,11 @@ function vehForm() {
     `)}
 
     ${esTarjeta(V) ? '' : seccion(2, 'Seguros', `
-      <div class="veh-row veh-seg"><div><span>Seguro de desgravamen</span><div class="small muted" id="desgInfo"></div></div>
+      <div class="veh-row veh-seg"><div><span>Seguro de Desgravamen</span><div class="small muted" id="desgInfo"></div></div>
         <div class="chk-group">${chk('desgT', V.desgT, 'Titular')}${V.codeudor === 'si' ? chk('desgC', V.desgC, 'Codeudor') : ''}</div></div>
       <div class="veh-row veh-seg"><div><span>Seguro DIMA</span><div class="small muted" id="dimaInfo"></div></div>
         <div class="chk-group">${chk('dimaT', V.dimaT, 'Titular')}${V.codeudor === 'si' ? chk('dimaC', V.dimaC, 'Codeudor') : ''}</div></div>
-      ${esConsumo(V) ? `<div class="veh-row veh-seg"><div><span>Seguro de cesantía</span><div class="small muted" id="cesInfo"></div></div>
+      ${esConsumo(V) ? `<div class="veh-row veh-seg"><div><span>Seguro de Cesantía</span><div class="small muted" id="cesInfo"></div></div>
         <div class="chk-group">${chk('cesT', V.cesT, 'Titular')}${V.codeudor === 'si' ? chk('cesC', V.cesC, 'Codeudor') : ''}</div></div>` : ''}
     `)}
 
@@ -511,12 +511,12 @@ function vehCalc() {
   const dima = nDima === 2 ? VEH.dima.mancomunado : nDima === 1 ? VEH.dima.titular : 0;
   const quien = (t, c) => t && c ? 'Titular y codeudor' : t ? 'Titular' : c ? 'Codeudor' : '';
   const aplica = nDesg > 0;
-  const desgTxt = aplica ? `${quien(V.desgT === 'si', V.desgC === 'si')} · ${pct3(desg)}% anual (${mensual(desg)}% mensual)` : 'Sin desgravamen';
+  const desgTxt = aplica ? `${quien(V.desgT === 'si', V.desgC === 'si')} · ${pct3(desg)}% anual (${mensual(desg)}% mensual)` : 'Sin Desgravamen';
   const dimaTxt = dima ? `${quien(V.dimaT === 'si', V.dimaC === 'si')} · ${pct3(dima)}% anual (${mensual(dima)}% mensual)` : '';
   const info = $('#desgInfo');
   if (info) info.textContent = aplica ? desgTxt : `1 persona ${pct3(VEH.desgravamen.titular)}% · 2 personas ${pct3(VEH.desgravamen.mancomunado)}% anual · hasta ${VEH.edadMax.anios} años y ${VEH.edadMax.dias} días`;
   const dInfo = $('#dimaInfo');
-  if (dInfo) dInfo.textContent = dima ? dimaTxt : aplica ? `1 persona ${pct3(VEH.dima.titular)}% · 2 personas ${pct3(VEH.dima.mancomunado)}% anual` : 'Solo para quien tiene desgravamen';
+  if (dInfo) dInfo.textContent = dima ? dimaTxt : aplica ? `1 persona ${pct3(VEH.dima.titular)}% · 2 personas ${pct3(VEH.dima.mancomunado)}% anual` : 'Solo para quien tiene Desgravamen';
 
   // Montos
   // El monto del crédito se definirá en la próxima sección; por ahora se muestra un resumen de la propuesta
@@ -604,8 +604,8 @@ function vehCalc() {
   const avisos = [];
   if (!V.fnac) avisos.push('Ingresa la fecha de nacimiento del titular (obligatoria).');
   if (conCodeudor && !V.cFnac) avisos.push('Ingresa la fecha de nacimiento del codeudor (obligatoria).');
-  if (eT && !okT) avisos.push(`El titular supera la edad para desgravamen (${edadTxt(eT)}): no puede llevar desgravamen ni DIMA.`);
-  if (conCodeudor && eC && !okC) avisos.push(`El codeudor supera la edad para desgravamen (${edadTxt(eC)}): no puede llevar desgravamen ni DIMA.`);
+  if (eT && !okT) avisos.push(`El titular supera la edad para Desgravamen (${edadTxt(eT)}): no puede llevar Desgravamen ni DIMA.`);
+  if (conCodeudor && eC && !okC) avisos.push(`El codeudor supera la edad para Desgravamen (${edadTxt(eC)}): no puede llevar Desgravamen ni DIMA.`);
   if (mayor && plazoMax < 12) avisos.push(`El mayor de los clientes ya no puede tomar un crédito de al menos 12 meses sin pasar los ${VEH.edadCredito} años.`);
   else if (mayor && V.plazoAjustado && plazo === plazoMax) avisos.push(`Plazo ajustado a ${plazoMax} meses: el crédito no puede pasar de los ${VEH.edadCredito} años del mayor.`);
   const deudasViv = V.deudas.some(d => grupoDe(d.cod) !== 'consumo');
@@ -692,7 +692,7 @@ function vehCalc() {
 
   <div class="grid-2">
     <div class="card kpi"><div class="v num">${fmt(plan.totales.interes, m)}</div><div class="l">Total intereses</div></div>
-    <div class="card kpi"><div class="v num">${fmt(plan.totales.desg, m)}</div><div class="l">Total seguros (${consumo ? 'desgravamen, DIMA y cesantía' : 'desgravamen + DIMA'})</div></div>
+    <div class="card kpi"><div class="v num">${fmt(plan.totales.desg, m)}</div><div class="l">Total seguros (${consumo ? 'Desgravamen, DIMA y Cesantía' : 'Desgravamen + DIMA'})</div></div>
     <div class="card kpi"><div class="v num">${fmt(plan.totales.total, m)}</div><div class="l">Total a pagar</div></div>
     <div class="card kpi"><div class="v num">${pct(teac, 2)}</div><div class="l">Costo efectivo anual (TEAC)</div></div>
   </div>
@@ -714,7 +714,7 @@ function vehCalc() {
       </tbody></table>
     </div>
   </details>
-  <p class="small muted">${consumo ? 'Desgravamen, DIMA y cesantía' : 'Desgravamen y DIMA'}: tasa anual ÷ 12, aplicada cada mes sobre el saldo capital. Cuota variable estimada con la TRe vigente; puede cambiar cuando el BCB publique una nueva.</p>`;
+  <p class="small muted">${consumo ? 'Desgravamen, DIMA y Cesantía' : 'Desgravamen y DIMA'}: tasa anual ÷ 12, aplicada cada mes sobre el saldo capital. Cuota variable estimada con la TRe vigente; puede cambiar cuando el BCB publique una nueva.</p>`;
   $('#vehPlan')?.addEventListener('toggle', e => { V.verPlan = e.target.open; guardarCalc(); });
   $('#simTel')?.addEventListener('input', e => {
     V.telefono = e.target.value; guardarCalc();
@@ -866,7 +866,7 @@ function firmaMsj() {
 }
 function mensajePropuesta(u) {
   const V = u.V, bs = n => `Bs ${nf2.format(n)}`;
-  const seguros = [u.aplica && 'desgravamen', u.dima && 'DIMA', u.ces && 'cesantía', u.primaMSC && 'seguro automotor'].filter(Boolean);
+  const seguros = [u.aplica && 'Desgravamen', u.dima && 'DIMA', u.ces && 'Cesantía', u.primaMSC && 'seguro automotor'].filter(Boolean);
   const lista = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' y ' + a.at(-1) : a[0];
   const l = [
     saludoMsj(V),
@@ -882,7 +882,7 @@ function mensajePropuesta(u) {
     l.push(`   ↳ meses 1 a ${u.fijo} · tasa fija ${nf2.format(num(V.tasaFija))}%`);
     l.push(`   ↳ desde el mes ${u.fijo + 1}: ${bs(u.cVar.total)} aprox.`);
   } else l.push(`   ↳ tasa fija ${nf2.format(num(V.tasaFija))}% todo el plazo`);
-  l.push(seguros.length ? `🛡️ *Seguros incluidos:* ${lista(seguros)}` : '🛡️ *Seguros:* sin desgravamen');
+  l.push(seguros.length ? `🛡️ *Seguros incluidos:* ${lista(seguros)}` : '🛡️ *Seguros:* sin Desgravamen');
   l.push(LINEA_MSJ);
   if (u.consumo && typeof requisitosConsumo === 'function') {
     l.push('', '📋 *Requisitos:*', ...requisitosConsumo({ ...u, V: { ...V, boletas: vehState().boletas } }).map(r => `✅ ${r}`));

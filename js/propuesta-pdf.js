@@ -87,9 +87,9 @@ function generarPropuestaPDF(u) {
   if (u.cVar) fila(`Cuota desde el mes ${u.fijo + 1} (estimada)`, bs(u.cVar.total), true);
   const d = u.desglose(u.c1);
   fila('Composición de la primera cuota', [`Capital + interés ${bs(d.capInt)}`, d.desg && `Desgravamen ${bs(d.desg)}`, d.dima && `DIMA ${bs(d.dima)}`, d.ces && `Cesantía ${bs(d.ces)}`].filter(Boolean).join(' · '));
-  fila('Seguro de desgravamen', u.desgTxt);
+  fila('Seguro de Desgravamen', u.desgTxt);
   fila('Seguro DIMA', u.dima ? u.dimaTxt : 'No');
-  fila('Seguro de cesantía', u.ces ? u.cesTxt : 'No');
+  fila('Seguro de Cesantía', u.ces ? u.cesTxt : 'No');
   fila('Total intereses', bs(u.totales.interes));
   fila('Total seguros', bs(u.totales.desg));
   fila('Total a pagar', bs(u.totales.total), true);
